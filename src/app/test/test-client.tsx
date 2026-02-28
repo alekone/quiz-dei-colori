@@ -217,9 +217,9 @@ export default function TestClient() {
       const target = event.target as HTMLElement | null;
       if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
 
-      if (["1", "2", "y", "n"].includes(key)) {
+      if (["1", "2", "y", "n", "s"].includes(key)) {
         event.preventDefault();
-        const dir = key === "1" || key === "y" ? "right" : "left";
+        const dir = key === "1" || key === "y" || key === "s" ? "right" : "left";
         triggerSwipe(dir);
         return;
       }
