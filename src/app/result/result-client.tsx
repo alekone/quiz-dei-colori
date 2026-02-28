@@ -17,6 +17,7 @@ export default function ResultClient() {
   const searchParams = useSearchParams();
   const resultId = searchParams.get("rid");
   const [result, setResult] = useState<TestResult | null>(null);
+  const [shareStatus, setShareStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!resultId) return;
@@ -33,9 +34,121 @@ export default function ResultClient() {
     return new Date(result.createdAt).toLocaleString("it-IT");
   }, [result]);
 
+  const referralUrl = useMemo(() => {
+    if (!result) return "";
+    if (typeof window === "undefined") return "";
+    const base = window.location.origin;
+    const params = new URLSearchParams({
+      ref: result.id,
+      utm_source: "share",
+      utm_medium: "referral",
+      utm_campaign: "test_colori",
+    });
+    return `${base}/?${params.toString()}`;
+  }, [result]);
+
+  const shareText = useMemo(() => {
+    if (!result) return "";
+    const top = colorMeta[result.summary.topColor].label;
+    return `Ho appena fatto il Test dei Colori: il mio colore dominante è ${top}. Vuoi scoprire il tuo?`;
+  }, [result]);
+
+  const createShareCard = async () => {
+    if (!result) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 630;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const bg = "#0f172a";
+    const accent = colorMeta[result.summary.topColor].accent;
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = accent;
+    ctx.fillRect(0, 0, canvas.width, 16);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 52px sans-serif";
+    ctx.fillText("Test dei Colori della Personalità", 64, 120);
+
+    const topLabel = colorMeta[result.summary.topColor].label;
+    ctx.font = "bold 72px sans-serif";
+    ctx.fillText(topLabel, 64, 220);
+
+    const percent = result.summary.percentages[result.summary.topColor];
+    ctx.font = "32px sans-serif";
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText(`Colore dominante · ${percent}%`, 64, 270);
+
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "26px sans-serif";
+    ctx.fillText("Fai il test anche tu", 64, 340);
+
+    ctx.fillStyle = accent;
+    ctx.fillRect(64, 380, 420, 68);
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "bold 30px sans-serif";
+    ctx.fillText("Inizia ora", 96, 425);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((value) => resolve(value), "image/png"),
+    );
+    if (!blob) return null;
+    return new File([blob], "risultato-test-colori.png", {
+      type: "image/png",
+    });
+  };
+
+  const handleShare = async () => {
+    if (!result) return;
+    setShareStatus(null);
+    try {
+      if (navigator.share) {
+        const card = await createShareCard();
+        if (card && navigator.canShare?.({ files: [card] })) {
+          await navigator.share({
+            title: "Test dei Colori della Personalità",
+            text: shareText,
+            files: [card],
+            url: referralUrl,
+          });
+        } else {
+          await navigator.share({
+            title: "Test dei Colori della Personalità",
+            text: shareText,
+            url: referralUrl,
+          });
+        }
+        setShareStatus("Condivisione completata.");
+        return;
+      }
+      await navigator.clipboard.writeText(referralUrl);
+      setShareStatus("Link copiato negli appunti.");
+    } catch (error) {
+      console.error("Share error", error);
+      setShareStatus("Condivisione annullata o non disponibile.");
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!referralUrl) return;
+    await navigator.clipboard.writeText(referralUrl);
+    setShareStatus("Link copiato negli appunti.");
+  };
+
   const handlePdf = () => {
     if (!result) return;
     const doc = new jsPDF();
+    const maxWidth = 180;
+    const lineHeight = 5;
+
+    const addParagraph = (text: string, x: number, y: number) => {
+      const lines = doc.splitTextToSize(text, maxWidth);
+      doc.text(lines, x, y);
+      return y + lines.length * lineHeight;
+    };
     doc.setFontSize(18);
     doc.text("Test dei Colori della Personalità", 14, 20);
     doc.setFontSize(12);
@@ -71,11 +184,20 @@ export default function ResultClient() {
       offset += 8;
     });
 
-    doc.text(
-      `Colore dominante: ${colorMeta[result.summary.topColor].label}`,
-      14,
-      startY + offset + 6,
-    );
+    if (result.summary.balanced) {
+      doc.text("Profilo bilanciato", 14, startY + offset + 6);
+    } else if (result.summary.coDominantColors.length > 1) {
+      const label = result.summary.coDominantColors
+        .map((color) => colorMeta[color].label)
+        .join(" · ");
+      doc.text(`Co-dominanza: ${label}`, 14, startY + offset + 6);
+    } else if (result.summary.topColor) {
+      doc.text(
+        `Colore dominante: ${colorMeta[result.summary.topColor].label}`,
+        14,
+        startY + offset + 6,
+      );
+    }
 
     const chartTop = startY + offset + 16;
     const chartSize = 70;
@@ -157,8 +279,52 @@ export default function ResultClient() {
       doc.setFontSize(11);
       doc.text(meta.label, 14, textY);
       doc.setFontSize(9);
-      doc.text(meta.description, 14, textY + 6, { maxWidth: 180 });
-      textY += 16;
+      textY = addParagraph(meta.who, 14, textY + 6);
+
+      doc.setFontSize(10);
+      doc.text("Come funzioni", 14, textY + 6);
+      doc.setFontSize(9);
+      meta.how.forEach((item) => {
+        textY = addParagraph(`- ${item}`, 14, textY + 11);
+      });
+
+      doc.setFontSize(10);
+      doc.text("Punti di forza", 14, textY + 6);
+      doc.setFontSize(9);
+      meta.strengths.forEach((item) => {
+        textY = addParagraph(`- ${item}`, 14, textY + 11);
+      });
+
+      doc.setFontSize(10);
+      doc.text("Punti ciechi", 14, textY + 6);
+      doc.setFontSize(9);
+      meta.blindSpots.forEach((item) => {
+        textY = addParagraph(`- ${item}`, 14, textY + 11);
+      });
+
+      doc.setFontSize(10);
+      doc.text("Come trattare gli altri colori", 14, textY + 6);
+      doc.setFontSize(9);
+      meta.withOthers.forEach((item) => {
+        textY = addParagraph(`- ${item}`, 14, textY + 11);
+      });
+
+      doc.setFontSize(10);
+      doc.text("Sotto stress", 14, textY + 6);
+      doc.setFontSize(9);
+      textY = addParagraph(meta.stress, 14, textY + 11);
+      textY = addParagraph(
+        `Trappola relazionale: ${meta.stressTrap}`,
+        14,
+        textY + 4,
+      );
+      textY = addParagraph(
+        `Segnale di allerta: ${meta.stressSignal}`,
+        14,
+        textY + 4,
+      );
+
+      textY += 6;
     });
 
     doc.save(`test-colori-${result.id}.pdf`);
@@ -195,7 +361,23 @@ export default function ResultClient() {
     );
   }
 
-  const topMeta = colorMeta[result.summary.topColor];
+  const topMeta = result.summary.topColor
+    ? colorMeta[result.summary.topColor]
+    : null;
+  const coDominantMetas = result.summary.coDominantColors.map(
+    (color) => colorMeta[color],
+  );
+  const secondaryMeta = result.summary.secondaryColor
+    ? colorMeta[result.summary.secondaryColor]
+    : null;
+  const zeroColors = result.summary.zeroColors;
+  const primaryColors = result.summary.balanced
+    ? []
+    : result.summary.coDominantColors.length > 1
+    ? result.summary.coDominantColors
+    : result.summary.topColor
+    ? [result.summary.topColor]
+    : [];
   const variantLabel = result.variant
     ? quizVariants[result.variant].label
     : quizVariants.full.label;
@@ -215,10 +397,37 @@ export default function ResultClient() {
             <Badge className="w-fit" variant="secondary">
               Risultato completo
             </Badge>
-            <h1 className="text-2xl font-semibold text-slate-900">
-              Colore dominante: {topMeta.label}
-            </h1>
-            <p className="text-sm text-slate-600">{topMeta.description}</p>
+            {result.summary.balanced ? (
+              <>
+                <h1 className="text-2xl font-semibold text-slate-900">
+                  Profilo bilanciato
+                </h1>
+                <p className="text-sm text-slate-600">
+                  I tuoi punteggi sono molto vicini tra loro: non emerge un
+                  colore dominante netto.
+                </p>
+              </>
+            ) : result.summary.coDominantColors.length > 1 ? (
+              <>
+                <h1 className="text-2xl font-semibold text-slate-900">
+                  Co-dominanza:{" "}
+                  {coDominantMetas.map((meta) => meta.label).join(" · ")}
+                </h1>
+                <p className="text-sm text-slate-600">
+                  Due colori sono molto vicini tra loro: entrambi influenzano il
+                  profilo in modo simile.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl font-semibold text-slate-900">
+                  Colore dominante: {topMeta?.label}
+                </h1>
+                <p className="text-sm text-slate-600">
+                  {topMeta?.description}
+                </p>
+              </>
+            )}
             <p className="text-xs text-slate-500">
               Email: {result.email} · {formattedDate}
             </p>
@@ -227,6 +436,12 @@ export default function ResultClient() {
               {durationLabel ? ` · Durata: ${durationLabel}` : ""}
               {result.cohort ? ` · Coorte: ${result.cohort}` : ""}
             </p>
+            {zeroColors.length > 0 && (
+              <p className="text-xs text-amber-600">
+                Assenza di risposte per:{" "}
+                {zeroColors.map((color) => colorMeta[color].label).join(", ")}.
+              </p>
+            )}
           </div>
 
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -242,7 +457,7 @@ export default function ResultClient() {
                   <div className="flex items-center justify-between">
                     <h2 className="text-sm font-semibold">{meta.label}</h2>
                     <span className="text-xs text-slate-500">
-                      {score} punti
+                      {percent}%
                     </span>
                   </div>
                   <div className="mt-2">
@@ -266,13 +481,19 @@ export default function ResultClient() {
             </div>
           </div>
 
-          <div className="mt-6 space-y-4">
-            {(Object.keys(result.summary.scores) as Color[]).map((color) => {
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-700">
+              Profili dettagliati
+            </h2>
+          </div>
+
+          <div className="mt-4 space-y-6">
+            {primaryColors.map((color) => {
               const meta = colorMeta[color];
               return (
                 <div
                   key={color}
-                  className="rounded-lg border border-slate-200 p-4"
+                  className="rounded-lg border border-slate-200 p-5"
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-slate-900">
@@ -282,26 +503,113 @@ export default function ResultClient() {
                       {result.summary.percentages[color]}%
                     </span>
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {meta.description}
-                  </p>
-                  <ul className="mt-2 text-sm text-slate-600">
-                    {meta.details.map((detail) => (
-                      <li key={detail} className="flex gap-2">
-                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
-                        <span>{detail}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="mt-2 text-sm text-slate-600">{meta.who}</p>
+
+                  <div className="mt-4 space-y-3 text-sm text-slate-600">
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-slate-700">
+                        Come funzioni
+                      </h4>
+                      <ul className="mt-2 space-y-1">
+                        {meta.how.map((item) => (
+                          <li key={item} className="flex gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-slate-700">
+                        Punti di forza
+                      </h4>
+                      <ul className="mt-2 space-y-1">
+                        {meta.strengths.map((item) => (
+                          <li key={item} className="flex gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-slate-700">
+                        Punti ciechi
+                      </h4>
+                      <ul className="mt-2 space-y-1">
+                        {meta.blindSpots.map((item) => (
+                          <li key={item} className="flex gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-slate-700">
+                        Come trattare gli altri colori
+                      </h4>
+                      <ul className="mt-2 space-y-2">
+                        {meta.withOthers.map((item) => (
+                          <li key={item} className="flex gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase text-slate-700">
+                        Sotto stress
+                      </h4>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {meta.stress}
+                      </p>
+                      <p className="mt-3 text-sm text-slate-600">
+                        <span className="font-semibold">
+                          Trappola relazionale:
+                        </span>{" "}
+                        {meta.stressTrap}
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        <span className="font-semibold">
+                          Segnale di allerta:
+                        </span>{" "}
+                        {meta.stressSignal}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               );
             })}
+
           </div>
+
+          {!result.summary.balanced &&
+            result.summary.coDominantColors.length <= 1 &&
+            secondaryMeta && (
+              <div className="mt-6 rounded-lg border border-dashed border-slate-200 p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-700">
+                    Influenza secondaria: {secondaryMeta.label}
+                  </h3>
+                  <span className="text-xs text-slate-500">
+                    {result.summary.percentages[result.summary.secondaryColor!]}%
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-500">
+                  {secondaryMeta.description}
+                </p>
+              </div>
+            )}
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button onClick={handlePdf}>Scarica PDF</Button>
             <Button variant="outline" onClick={handleEmail}>
               Invia via email
+            </Button>
+            <Button variant="outline" onClick={handleShare}>
+              Condividi risultato
             </Button>
             <Button
               variant="ghost"
@@ -312,6 +620,31 @@ export default function ResultClient() {
               Nuovo test
             </Button>
           </div>
+          {shareStatus && (
+            <p className="mt-2 text-xs text-slate-500">{shareStatus}</p>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="text-sm font-semibold text-slate-700">
+            Invita amici
+          </h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Condividi il test con un link personale: aiuti i tuoi amici a
+            scoprire il loro colore.
+          </p>
+          <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+            {referralUrl}
+          </div>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Button variant="outline" onClick={handleCopyLink}>
+              Copia link invito
+            </Button>
+            <Button onClick={handleShare}>Condividi</Button>
+          </div>
+          {shareStatus && (
+            <p className="mt-2 text-xs text-slate-500">{shareStatus}</p>
+          )}
         </Card>
 
         <div className="text-xs text-slate-500">

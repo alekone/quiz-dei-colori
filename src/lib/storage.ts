@@ -9,6 +9,7 @@ export type TestResult = {
   durationMs?: number;
   variant?: QuizVariant;
   cohort?: string;
+  referrerId?: string;
   answers: Record<string, number>;
   summary: ScoreSummary;
   questionCount: number;
@@ -22,6 +23,7 @@ type TestResultRow = {
   duration_ms: number | null;
   variant: string | null;
   cohort: string | null;
+  referrer_id: string | null;
   answers: Record<string, number>;
   summary: ScoreSummary;
   question_count: number;
@@ -29,6 +31,7 @@ type TestResultRow = {
 
 const USER_EMAIL_KEY = "qc_user_email";
 const USER_COHORT_KEY = "qc_user_cohort";
+const REFERRER_KEY = "qc_referrer_id";
 const RESULTS_KEY = "qc_test_results";
 const DRAFT_KEY = "qc_test_draft";
 
@@ -67,6 +70,23 @@ export const setUserCohort = (cohort: string) => {
 export const clearUserCohort = () => {
   if (!isBrowser()) return;
   window.localStorage.removeItem(USER_COHORT_KEY);
+};
+
+export const getReferrerId = (): string | null => {
+  if (!isBrowser()) return null;
+  return window.localStorage.getItem(REFERRER_KEY);
+};
+
+export const setReferrerId = (referrerId: string) => {
+  if (!isBrowser()) return;
+  const trimmed = referrerId.trim();
+  if (!trimmed) return;
+  window.localStorage.setItem(REFERRER_KEY, trimmed);
+};
+
+export const clearReferrerId = () => {
+  if (!isBrowser()) return;
+  window.localStorage.removeItem(REFERRER_KEY);
 };
 
 export type TestDraft = {
@@ -122,6 +142,7 @@ export const saveTestResultRemote = async (result: TestResult) => {
     duration_ms: result.durationMs ?? null,
     variant: result.variant ?? null,
     cohort: result.cohort ?? null,
+    referrer_id: result.referrerId ?? null,
     answers: result.answers,
     summary: result.summary,
     question_count: result.questionCount,
@@ -167,6 +188,7 @@ export const getTestResultsRemote = async (): Promise<{
         variant:
           row.variant === "short" ? "short" : row.variant ? "full" : undefined,
         cohort: row.cohort ?? undefined,
+        referrerId: row.referrer_id ?? undefined,
         answers,
         summary,
         questionCount: row.question_count,
@@ -210,6 +232,7 @@ export const getTestResultsRemoteByEmail = async (
     durationMs: row.duration_ms ?? undefined,
     variant: row.variant === "short" ? "short" : row.variant ? "full" : undefined,
     cohort: row.cohort ?? undefined,
+    referrerId: row.referrer_id ?? undefined,
     answers: row.answers,
     summary: row.summary,
     questionCount: row.question_count,

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import ReferralCapture from "@/components/referral-capture";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +8,9 @@ import { Badge } from "@/components/ui/badge";
 export default function Home() {
   return (
     <div className="min-h-screen">
+      <Suspense fallback={null}>
+        <ReferralCapture />
+      </Suspense>
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-5 py-12 sm:px-8">
         <header className="flex flex-col gap-4">
           <Badge className="w-fit" variant="secondary">
