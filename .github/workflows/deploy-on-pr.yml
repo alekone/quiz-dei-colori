@@ -26,18 +26,17 @@ jobs:
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
-          SSH_PRIVATE_KEY_B64: ${{ secrets.HOSTINGER_SSH_KEY_B64 }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST || '92.113.28.128' }}
           REMOTE_PORT: ${{ secrets.REMOTE_PORT || '65002' }}
         run: |
           mkdir -p ~/.ssh
-          if [ -n "$SSH_PRIVATE_KEY_B64" ]; then
-            echo "$SSH_PRIVATE_KEY_B64" | base64 --decode > ~/.ssh/hostinger_key
-          else
-            echo "$SSH_PRIVATE_KEY" > ~/.ssh/hostinger_key
+          if [ -z "$SSH_PRIVATE_KEY" ]; then
+            echo "HOSTINGER_SSH_KEY secret is empty."
+            exit 1
           fi
+          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/hostinger_key
           chmod 600 ~/.ssh/hostinger_key
-          ssh-keyscan -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts || true
 
       - name: Deploy
         env:
