@@ -35,7 +35,12 @@ jobs:
             exit 1
           fi
           printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/hostinger_key
+          sed -i 's/\r$//' ~/.ssh/hostinger_key
           chmod 600 ~/.ssh/hostinger_key
+          if ! ssh-keygen -y -f ~/.ssh/hostinger_key >/dev/null 2>&1; then
+            echo "HOSTINGER_SSH_KEY is not a valid unencrypted private key."
+            exit 1
+          fi
           ssh-keyscan -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts || true
 
       - name: Deploy
