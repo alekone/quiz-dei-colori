@@ -219,8 +219,8 @@ export default function TestClient() {
 
       if (["1", "2", "y", "n"].includes(key)) {
         event.preventDefault();
-        const weight = key === "1" || key === "y" ? 1 : 0;
-        commitAnswer(weight);
+        const dir = key === "1" || key === "y" ? "right" : "left";
+        triggerSwipe(dir);
         return;
       }
 
