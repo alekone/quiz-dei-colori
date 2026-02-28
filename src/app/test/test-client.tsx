@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Pause, Shuffle, StepBack } from "lucide-react";
 import {
   getQuestionsForVariant,
   quizVariants,
@@ -336,6 +337,25 @@ export default function TestClient() {
     lastMoveTime.current = performance.now();
   };
 
+  const triggerSwipe = (dir: "left" | "right") => {
+    if (isSwipingOut) return;
+    const width = cardRef.current?.offsetWidth ?? 320;
+    setSwipeDir(dir);
+    setIsSwipingOut(true);
+    setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
+    setDragY(0);
+    window.setTimeout(() => {
+      setIsSwipingOut(false);
+      setDragX(0);
+      setDragY(0);
+      setSwipeDir("none");
+      commitAnswer(dir === "right" ? 1 : 0, { autoAdvance: true });
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(10);
+      }
+    }, 160);
+  };
+
   const handlePointerUp = () => {
     if (!isDragging) return;
     setIsDragging(false);
@@ -349,20 +369,7 @@ export default function TestClient() {
 
     if (shouldCommit) {
       const dir = deltaX >= 0 ? "right" : "left";
-      setSwipeDir(dir);
-      setIsSwipingOut(true);
-      setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
-      setDragY(0);
-      window.setTimeout(() => {
-        setIsSwipingOut(false);
-        setDragX(0);
-        setDragY(0);
-        setSwipeDir("none");
-        commitAnswer(dir === "right" ? 1 : 0, { autoAdvance: true });
-        if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-          navigator.vibrate(10);
-        }
-      }, 160);
+      triggerSwipe(dir);
     } else {
       setDragX(0);
       setDragY(0);
@@ -483,23 +490,20 @@ export default function TestClient() {
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
             >
+              {showHint && currentIndex === 0 && (
+                <>
+                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-200">
+                    ←
+                  </span>
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-200">
+                    →
+                  </span>
+                </>
+              )}
               <h1 className="text-xl font-semibold text-slate-900">
                 {currentQuestion.text}
               </h1>
-              <p className="mt-2 text-sm text-slate-500 sm:block">
-                Swipe a destra per Sì, a sinistra per No. Puoi usare anche i
-                tasti S/N.
-              </p>
-              <p className="mt-2 text-xs text-slate-500 sm:hidden">
-                Swipe → Sì, ← No.
-              </p>
             </div>
-            {showHint && currentIndex === 0 && (
-              <p className="text-xs text-slate-500">
-                Suggerimento: puoi trascinare la card oppure usare i pulsanti
-                sotto.
-              </p>
-            )}
           </div>
 
           {showSaved && (
@@ -508,7 +512,7 @@ export default function TestClient() {
             </p>
           )}
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-6 flex flex-col gap-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Button
                 variant="outline"
@@ -517,9 +521,10 @@ export default function TestClient() {
                     ? "border-rose-500 bg-rose-50 text-rose-700"
                     : ""
                 }
-                onClick={() => commitAnswer(0, { autoAdvance: true })}
+                onClick={() => triggerSwipe("left")}
               >
-                No
+                <span>No</span>
+                <span className="ml-2 text-xs text-slate-400">(N)</span>
               </Button>
               <Button
                 className={
@@ -527,26 +532,33 @@ export default function TestClient() {
                     ? "bg-emerald-500 text-white hover:bg-emerald-600"
                     : ""
                 }
-                onClick={() => commitAnswer(1, { autoAdvance: true })}
+                onClick={() => triggerSwipe("right")}
               >
-                Sì
+                <span>Sì</span>
+                <span className="ml-2 text-xs text-slate-200">(S)</span>
               </Button>
+            </div>
+            <div className="flex items-center gap-2">
               <Button
-                variant="ghost"
+                variant="outline"
                 onClick={handlePrevious}
                 disabled={currentIndex === 0}
+                aria-label="Indietro"
               >
-                Indietro
+                <StepBack className="h-4 w-4" />
+                <span className="ml-2 text-xs text-slate-500">Indietro</span>
               </Button>
-              <Button variant="ghost" onClick={handlePause}>
-                Pausa
+              <Button variant="outline" onClick={handlePause} aria-label="Pausa">
+                <Pause className="h-4 w-4" />
+                <span className="ml-2 text-xs text-slate-500">Pausa</span>
               </Button>
               <Button
-                variant="ghost"
-                className="hidden sm:inline-flex"
+                variant="outline"
                 onClick={handleRandom}
+                aria-label="Compila random"
               >
-                Compila random
+                <Shuffle className="h-4 w-4" />
+                <span className="ml-2 text-xs text-slate-500">Random</span>
               </Button>
             </div>
           </div>
