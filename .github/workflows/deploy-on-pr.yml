@@ -36,7 +36,7 @@ jobs:
 
       - name: Deploy
         env:
-          SSH_KEY: ~/.ssh/hostinger_key
+          SSH_KEY: ${{ env.HOME }}/.ssh/hostinger_key
           REMOTE_USER: ${{ secrets.REMOTE_USER || 'u945451001' }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST || '92.113.28.128' }}
           REMOTE_PORT: ${{ secrets.REMOTE_PORT || '65002' }}
