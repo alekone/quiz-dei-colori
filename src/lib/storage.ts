@@ -1,4 +1,4 @@
-import type { QuizVariant, ScoreSummary } from "./quiz";
+import type { Color, QuizVariant, ScoreSummary } from "./quiz";
 import { isSupabaseEnabled, supabaseClient } from "./supabaseClient";
 
 export type TestResult = {
@@ -36,6 +36,59 @@ const RESULTS_KEY = "qc_test_results";
 const DRAFT_KEY = "qc_test_draft";
 
 const isBrowser = () => typeof window !== "undefined";
+const colors: Color[] = ["rosso", "giallo", "verde", "blu"];
+
+const normalizeSummary = (summary: Partial<ScoreSummary>): ScoreSummary => {
+  const scores = summary.scores ?? {
+    rosso: 0,
+    giallo: 0,
+    verde: 0,
+    blu: 0,
+  };
+  const percentages = summary.percentages ?? {
+    rosso: 0,
+    giallo: 0,
+    verde: 0,
+    blu: 0,
+  };
+  const orderedColors =
+    summary.orderedColors ??
+    (colors.slice().sort((a, b) => percentages[b] - percentages[a]) as Color[]);
+  const topPercent = percentages[orderedColors[0]] ?? 0;
+  const balanced = orderedColors.every(
+    (color) => percentages[color] === topPercent,
+  );
+  const coDominantColors = balanced
+    ? colors
+    : orderedColors.filter(
+        (color) => Math.abs(percentages[color] - topPercent) <= 5,
+      );
+  const topColor = balanced ? null : orderedColors[0];
+  const secondaryColor =
+    balanced || coDominantColors.length > 1 ? null : orderedColors[1] ?? null;
+  const zeroColors = colors.filter((color) => scores[color] === 0);
+  const total =
+    summary.total ??
+    Object.values(scores).reduce((sum, value) => sum + value, 0);
+
+  return {
+    scores,
+    sectionTotals: summary.sectionTotals ?? {
+      rosso: 0,
+      giallo: 0,
+      verde: 0,
+      blu: 0,
+    },
+    percentages,
+    total,
+    topColor,
+    secondaryColor,
+    orderedColors,
+    coDominantColors,
+    balanced,
+    zeroColors,
+  };
+};
 
 export const getUserEmail = (): string | null => {
   if (!isBrowser()) return null;
@@ -109,7 +162,11 @@ export const getTestResults = (): TestResult[] => {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as TestResult[];
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((result) => ({
+      ...result,
+      summary: normalizeSummary(result.summary),
+    }));
   } catch {
     return [];
   }
@@ -196,7 +253,7 @@ export const getTestResultsRemote = async (): Promise<{
         cohort: row.cohort ?? undefined,
         referrerId: row.referrer_id ?? undefined,
         answers,
-        summary,
+        summary: normalizeSummary(summary),
         questionCount: row.question_count,
       } as TestResult;
     })
@@ -240,7 +297,9 @@ export const getTestResultsRemoteByEmail = async (
     cohort: row.cohort ?? undefined,
     referrerId: row.referrer_id ?? undefined,
     answers: row.answers,
-    summary: row.summary,
+    summary: normalizeSummary(
+      typeof row.summary === "string" ? JSON.parse(row.summary) : row.summary,
+    ),
     questionCount: row.question_count,
   })) as TestResult[];
 
