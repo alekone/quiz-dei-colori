@@ -38,13 +38,15 @@ export default function ResultClient() {
     if (!result) return "";
     if (typeof window === "undefined") return "";
     const base = window.location.origin;
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    const path = `${basePath}/quiz-colori`.replace(/\/{2,}/g, "/");
     const params = new URLSearchParams({
       ref: result.id,
       utm_source: "share",
       utm_medium: "referral",
       utm_campaign: "test_colori",
     });
-    return `${base}/?${params.toString()}`;
+    return `${base}${path}?${params.toString()}`;
   }, [result]);
 
   const shareText = useMemo(() => {
