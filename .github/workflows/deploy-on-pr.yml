@@ -36,11 +36,10 @@ jobs:
 
       - name: Deploy
         env:
-          SSH_KEY: ~/.ssh/hostinger_key
           REMOTE_USER: ${{ secrets.REMOTE_USER || 'u945451001' }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST || '92.113.28.128' }}
           REMOTE_PORT: ${{ secrets.REMOTE_PORT || '65002' }}
           REMOTE_DIR: ${{ secrets.REMOTE_DIR || 'domains/test.mininno.com/public_html/quiz-colori' }}
           NEXT_PUBLIC_BASE_PATH: /quiz-colori
           NEXT_PUBLIC_ASSET_PREFIX: /quiz-colori/
-        run: npm run deploy
+        run: SSH_KEY="$HOME/.ssh/hostinger_key" npm run deploy
