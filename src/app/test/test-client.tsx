@@ -262,7 +262,10 @@ export default function TestClient() {
   };
 
   const handlePause = () => {
+    const email = getUserEmail();
+    if (!email) return;
     saveTestDraft({
+      email,
       variant,
       currentIndex,
       answers,
