@@ -49,8 +49,14 @@ export default function ResultClient() {
 
   const shareText = useMemo(() => {
     if (!result) return "";
-    const top = colorMeta[result.summary.topColor].label;
-    return `Ho appena fatto il Test dei Colori: il mio colore dominante è ${top}. Vuoi scoprire il tuo?`;
+    const top = result.summary.topColor
+      ? colorMeta[result.summary.topColor].label
+      : result.summary.coDominantColors.length > 1
+        ? `co-dominanza ${result.summary.coDominantColors
+            .map((color) => colorMeta[color].label)
+            .join(" · ")}`
+        : "profilo bilanciato";
+    return `Ho appena fatto il Test dei Colori: il mio risultato è ${top}. Vuoi scoprire il tuo?`;
   }, [result]);
 
   const createShareCard = async () => {
@@ -61,8 +67,32 @@ export default function ResultClient() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
+    const primaryColors = result.summary.coDominantColors;
+    const accent = result.summary.topColor
+      ? colorMeta[result.summary.topColor].accent
+      : primaryColors.length > 0
+        ? colorMeta[primaryColors[0]].accent
+        : "#94a3b8";
+    const primaryLabel = result.summary.balanced
+      ? "Profilo bilanciato"
+      : primaryColors.length > 1
+        ? `Co-dominanza: ${primaryColors
+            .map((color) => colorMeta[color].label)
+            .join(" · ")}`
+        : result.summary.topColor
+          ? colorMeta[result.summary.topColor].label
+          : "Risultato";
+    const percent = result.summary.topColor
+      ? result.summary.percentages[result.summary.topColor]
+      : null;
+    const subtitle = result.summary.balanced
+      ? "Profilo bilanciato"
+      : primaryColors.length > 1
+        ? "Co-dominanza"
+        : percent !== null
+          ? `Colore dominante · ${percent}%`
+          : "Risultato";
     const bg = "#0f172a";
-    const accent = colorMeta[result.summary.topColor].accent;
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -73,14 +103,12 @@ export default function ResultClient() {
     ctx.font = "bold 52px sans-serif";
     ctx.fillText("Test dei Colori della Personalità", 64, 120);
 
-    const topLabel = colorMeta[result.summary.topColor].label;
     ctx.font = "bold 72px sans-serif";
-    ctx.fillText(topLabel, 64, 220);
+    ctx.fillText(primaryLabel, 64, 220);
 
-    const percent = result.summary.percentages[result.summary.topColor];
     ctx.font = "32px sans-serif";
     ctx.fillStyle = "#e2e8f0";
-    ctx.fillText(`Colore dominante · ${percent}%`, 64, 270);
+    ctx.fillText(subtitle, 64, 270);
 
     ctx.fillStyle = "#94a3b8";
     ctx.font = "26px sans-serif";
@@ -332,7 +360,13 @@ export default function ResultClient() {
 
   const handleEmail = () => {
     if (!result) return;
-    const top = colorMeta[result.summary.topColor].label;
+    const top = result.summary.topColor
+      ? colorMeta[result.summary.topColor].label
+      : result.summary.coDominantColors.length > 1
+        ? `Co-dominanza: ${result.summary.coDominantColors
+            .map((color) => colorMeta[color].label)
+            .join(" · ")}`
+        : "Profilo bilanciato";
     const summaryLines = (Object.keys(result.summary.scores) as Color[])
       .map((color) => {
         const meta = colorMeta[color];
