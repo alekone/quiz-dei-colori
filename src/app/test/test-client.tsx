@@ -15,7 +15,7 @@ import {
 import {
   clearTestDraft,
   clearReferrerId,
-  getTestDraft,
+  getTestDraftForEmail,
   getReferrerId,
   getUserCohort,
   getUserEmail,
@@ -68,7 +68,8 @@ export default function TestClient() {
   }, [router]);
 
   useEffect(() => {
-    const existing = getTestDraft();
+    const email = getUserEmail();
+    const existing = email ? getTestDraftForEmail(email) : null;
     if (
       existing &&
       existing.variant === variant &&
@@ -179,7 +180,10 @@ export default function TestClient() {
 
   useEffect(() => {
     if (!hasStarted) return;
+    const email = getUserEmail();
+    if (!email) return;
     saveTestDraft({
+      email,
       variant,
       currentIndex,
       answers,

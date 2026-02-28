@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   getTestResults,
   getTestResultsRemote,
+  getUserEmail,
   type TestResult,
 } from "@/lib/storage";
 import { isSupabaseEnabled } from "@/lib/supabaseClient";
@@ -24,7 +25,14 @@ export default function HistoryPage() {
         setResults(remote);
         setRemoteError(error ?? null);
       } else {
-        setResults(getTestResults());
+        const email = getUserEmail();
+        if (email) {
+          setResults(
+            getTestResults().filter((result) => result.email === email),
+          );
+        } else {
+          setResults([]);
+        }
       }
     };
     void load();

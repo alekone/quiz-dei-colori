@@ -44,7 +44,12 @@ export const getUserEmail = (): string | null => {
 
 export const setUserEmail = (email: string) => {
   if (!isBrowser()) return;
-  window.localStorage.setItem(USER_EMAIL_KEY, email.trim().toLowerCase());
+  const normalized = email.trim().toLowerCase();
+  window.localStorage.setItem(USER_EMAIL_KEY, normalized);
+  const draft = getTestDraft();
+  if (draft && draft.email !== normalized) {
+    clearTestDraft();
+  }
 };
 
 export const clearUserEmail = () => {
@@ -90,6 +95,7 @@ export const clearReferrerId = () => {
 };
 
 export type TestDraft = {
+  email: string;
   variant: QuizVariant;
   currentIndex: number;
   answers: Record<string, number>;
@@ -298,11 +304,19 @@ export const getTestDraft = (): TestDraft | null => {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as TestDraft;
-    if (!parsed?.variant || !parsed?.answers) return null;
+    if (!parsed?.variant || !parsed?.answers || !parsed?.email) return null;
     return parsed;
   } catch {
     return null;
   }
+};
+
+export const getTestDraftForEmail = (email: string): TestDraft | null => {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  const draft = getTestDraft();
+  if (!draft || draft.email !== normalized) return null;
+  return draft;
 };
 
 export const saveTestDraft = (draft: TestDraft) => {
