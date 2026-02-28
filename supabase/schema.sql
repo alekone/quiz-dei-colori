@@ -6,6 +6,7 @@ create table if not exists public.test_results (
   duration_ms integer,
   variant text,
   cohort text,
+  referrer_id text,
   answers jsonb not null,
   summary jsonb not null,
   question_count integer not null

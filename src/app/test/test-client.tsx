@@ -14,7 +14,9 @@ import {
 } from "@/lib/quiz";
 import {
   clearTestDraft,
+  clearReferrerId,
   getTestDraft,
+  getReferrerId,
   getUserCohort,
   getUserEmail,
   saveTestDraft,
@@ -47,6 +49,7 @@ export default function TestClient() {
   const [swipeDir, setSwipeDir] = useState<"left" | "right" | "none">("none");
   const [isSwipingOut, setIsSwipingOut] = useState(false);
   const [enterOffset, setEnterOffset] = useState(0);
+  const [isEntering, setIsEntering] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dragStartX = useRef(0);
   const dragStartY = useRef(0);
@@ -114,6 +117,7 @@ export default function TestClient() {
       0,
       Date.now() - new Date(startedAt).getTime(),
     );
+    const referrerId = getReferrerId() ?? undefined;
     const result: TestResult = {
       id: typeof crypto !== "undefined" ? crypto.randomUUID() : String(Date.now()),
       email,
@@ -122,6 +126,7 @@ export default function TestClient() {
       durationMs,
       variant,
       cohort: getUserCohort() ?? undefined,
+      referrerId,
       answers: nextAnswers,
       summary,
       questionCount: questionSet.length,
@@ -129,6 +134,7 @@ export default function TestClient() {
     saveTestResult(result);
     void saveTestResultRemote(result);
     clearTestDraft();
+    clearReferrerId();
     router.push(`/result?rid=${result.id}`);
   };
 
@@ -186,8 +192,10 @@ export default function TestClient() {
     if (lastSwipeDir.current === "none") return;
     const direction = lastSwipeDir.current;
     const offset = direction === "left" ? 60 : -60;
+    setIsEntering(true);
     setEnterOffset(offset);
     const frame = window.requestAnimationFrame(() => {
+      setIsEntering(false);
       setEnterOffset(0);
     });
     lastSwipeDir.current = "none";
@@ -353,9 +361,8 @@ export default function TestClient() {
 
   const cardRotation = Math.max(-8, Math.min(8, dragX / 20));
   const cardTransform = `translateX(${dragX + enterOffset}px) rotate(${cardRotation}deg)`;
-  const cardTransition = isDragging
-    ? "none"
-    : "transform 180ms ease";
+  const cardTransition =
+    isDragging || isEntering ? "none" : "transform 180ms ease";
 
   return (
     <div className="min-h-screen px-5 py-10">
@@ -540,7 +547,7 @@ export default function TestClient() {
               {summaryPreview.orderedColors.map((color) => (
                 <div key={color} className="rounded-lg bg-slate-100 p-3">
                   <div className="font-medium capitalize">{color}</div>
-                  <div>{summaryPreview.scores[color]} risposte</div>
+                  <div>{summaryPreview.percentages[color]}%</div>
                 </div>
               ))}
             </div>

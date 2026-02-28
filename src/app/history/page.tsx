@@ -65,7 +65,15 @@ export default function HistoryPage() {
           ) : (
             <div className="mt-6 space-y-3">
               {results.map((result) => {
-                const dominant = colorMeta[result.summary.topColor];
+                const dominantLabel = result.summary.balanced
+                  ? "Profilo bilanciato"
+                  : result.summary.coDominantColors.length > 1
+                    ? `Co-dominanza: ${result.summary.coDominantColors
+                        .map((color) => colorMeta[color].label)
+                        .join(" · ")}`
+                    : result.summary.topColor
+                      ? colorMeta[result.summary.topColor].label
+                      : "Risultato";
                 const variantLabel = result.variant
                   ? quizVariants[result.variant].label
                   : quizVariants.full.label;
@@ -79,7 +87,7 @@ export default function HistoryPage() {
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{dominant.label}</Badge>
+                        <Badge variant="secondary">{dominantLabel}</Badge>
                         <span className="text-sm font-medium text-slate-900">
                           {result.email}
                         </span>

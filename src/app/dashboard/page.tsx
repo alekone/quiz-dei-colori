@@ -56,7 +56,9 @@ export default function DashboardPage() {
     results.forEach((result) => {
       const variant = result.variant ?? "full";
       variantCounts[variant] += 1;
-      topColorCounts[result.summary.topColor] += 1;
+      if (result.summary.topColor) {
+        topColorCounts[result.summary.topColor] += 1;
+      }
 
       (Object.keys(result.summary.percentages) as Color[]).forEach((color) => {
         averagePercentages[color] += result.summary.percentages[color];
@@ -74,7 +76,9 @@ export default function DashboardPage() {
             topColorCounts: emptyColorCounts(),
           };
         entry.count += 1;
-        entry.topColorCounts[result.summary.topColor] += 1;
+        if (result.summary.topColor) {
+          entry.topColorCounts[result.summary.topColor] += 1;
+        }
         cohortMap.set(result.cohort, entry);
       }
     });
