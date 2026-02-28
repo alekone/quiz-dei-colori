@@ -49,8 +49,14 @@ export default function ResultClient() {
 
   const shareText = useMemo(() => {
     if (!result) return "";
-    const top = colorMeta[result.summary.topColor].label;
-    return `Ho appena fatto il Test dei Colori: il mio colore dominante è ${top}. Vuoi scoprire il tuo?`;
+    const top = result.summary.topColor
+      ? colorMeta[result.summary.topColor].label
+      : result.summary.coDominantColors.length > 1
+        ? `co-dominanza ${result.summary.coDominantColors
+            .map((color) => colorMeta[color].label)
+            .join(" · ")}`
+        : "profilo bilanciato";
+    return `Ho appena fatto il Test dei Colori: il mio risultato è ${top}. Vuoi scoprire il tuo?`;
   }, [result]);
 
   const createShareCard = async () => {
