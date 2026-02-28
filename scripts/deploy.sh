@@ -10,6 +10,10 @@ REMOTE_DIR="${REMOTE_DIR:-domains/test.mininno.com/public_html/quiz-colori}"
 export NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH:-/quiz-colori}"
 export NEXT_PUBLIC_ASSET_PREFIX="${NEXT_PUBLIC_ASSET_PREFIX:-/quiz-colori/}"
 
+if [[ "${SSH_KEY}" == "~/"* ]]; then
+  SSH_KEY="${SSH_KEY/#\~/${HOME}}"
+fi
+
 if [ ! -f "${SSH_KEY}" ]; then
   echo "SSH key not found at ${SSH_KEY}."
   exit 1

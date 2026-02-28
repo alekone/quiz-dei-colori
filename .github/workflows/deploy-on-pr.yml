@@ -26,21 +26,25 @@ jobs:
       - name: Configure SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.HOSTINGER_SSH_KEY }}
+          SSH_PRIVATE_KEY_B64: ${{ secrets.HOSTINGER_SSH_KEY_B64 }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST || '92.113.28.128' }}
           REMOTE_PORT: ${{ secrets.REMOTE_PORT || '65002' }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/hostinger_key
+          if [ -n "$SSH_PRIVATE_KEY_B64" ]; then
+            echo "$SSH_PRIVATE_KEY_B64" | base64 --decode > ~/.ssh/hostinger_key
+          else
+            echo "$SSH_PRIVATE_KEY" > ~/.ssh/hostinger_key
+          fi
           chmod 600 ~/.ssh/hostinger_key
           ssh-keyscan -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts
 
       - name: Deploy
         env:
-          SSH_KEY: ~/.ssh/hostinger_key
           REMOTE_USER: ${{ secrets.REMOTE_USER || 'u945451001' }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST || '92.113.28.128' }}
           REMOTE_PORT: ${{ secrets.REMOTE_PORT || '65002' }}
           REMOTE_DIR: ${{ secrets.REMOTE_DIR || 'domains/test.mininno.com/public_html/quiz-colori' }}
           NEXT_PUBLIC_BASE_PATH: /quiz-colori
           NEXT_PUBLIC_ASSET_PREFIX: /quiz-colori/
-        run: npm run deploy
+        run: SSH_KEY="$HOME/.ssh/hostinger_key" npm run deploy
