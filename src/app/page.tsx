@@ -1,64 +1,86 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen">
+      <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-5 py-12 sm:px-8">
+        <header className="flex flex-col gap-4">
+          <Badge className="w-fit" variant="secondary">
+            Test pubblico
+          </Badge>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900 sm:text-4xl">
+            Test dei Colori della Personalità
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="max-w-2xl text-base text-slate-600 sm:text-lg">
+            Un test rapido per scoprire il tuo colore dominante. Funziona da
+            mobile, salva lo storico e genera un PDF dei risultati.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button asChild size="lg">
+              <Link href="/login?variant=full">Test completo (80)</Link>
+            </Button>
+            <Button asChild variant="outline" size="lg">
+              <Link href="/login?variant=short">Test rapido (20)</Link>
+            </Button>
+            <Button asChild variant="ghost" size="lg">
+              <Link href="/history">Vedi storico</Link>
+            </Button>
+            <Button asChild variant="ghost" size="lg">
+              <Link href="/dashboard">Dashboard</Link>
+            </Button>
+          </div>
+        </header>
+
+        <section className="grid gap-4 md:grid-cols-3">
+          {[
+            {
+              title: "Accesso rapido",
+              text: "Basta inserire l'email per iniziare.",
+            },
+            {
+              title: "20 o 80 domande",
+              text: "Versione rapida o completa con salvataggio automatico.",
+            },
+            {
+              title: "PDF e invio",
+              text: "Esporta il risultato e invialo via email.",
+            },
+          ].map((item) => (
+            <Card key={item.title} className="p-5">
+              <h3 className="text-base font-semibold text-slate-900">
+                {item.title}
+              </h3>
+              <p className="mt-2 text-sm text-slate-600">{item.text}</p>
+            </Card>
+          ))}
+        </section>
+
+        <Card className="p-5">
+          <h2 className="text-base font-semibold text-slate-900">
+            Cos'è il test dei colori
+          </h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Il test dei colori è un questionario che associa preferenze e
+            comportamenti a quattro colori principali (rosso, giallo, verde,
+            blu). È uno strumento orientativo per riflettere sul proprio stile,
+            non una diagnosi clinica.
+          </p>
+          <div className="mt-4 text-sm text-slate-600">
+            Quadranti: Riflessivo · Entusiasta · Preciso · Concreto
+          </div>
+          <div className="mt-4 text-xs text-slate-500">
+            <Link href="/privacy" className="underline hover:text-slate-700">
+              Informativa privacy
+            </Link>{" "}
+            ·{" "}
+            <Link href="/diritti" className="underline hover:text-slate-700">
+              Diritti GDPR
+            </Link>
+          </div>
+        </Card>
       </main>
     </div>
   );
