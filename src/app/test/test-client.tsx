@@ -50,6 +50,8 @@ export default function TestClient() {
   const [isSwipingOut, setIsSwipingOut] = useState(false);
   const [enterOffset, setEnterOffset] = useState(0);
   const [isEntering, setIsEntering] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [showHint, setShowHint] = useState(true);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dragStartX = useRef(0);
   const dragStartY = useRef(0);
@@ -155,6 +157,7 @@ export default function TestClient() {
     setAnswers(nextAnswers);
     setHasStarted(true);
     setSavedAt(Date.now());
+    setShowHint(false);
 
     if (options.autoAdvance) {
       lastSwipeDir.current = weight === 1 ? "right" : "left";
@@ -312,6 +315,7 @@ export default function TestClient() {
     setDragX(0);
     setDragY(0);
     setSwipeDir("none");
+    setShowHint(false);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -408,23 +412,44 @@ export default function TestClient() {
           </Card>
         )}
 
-        <Card className="p-6">
+        <Card className="relative p-6">
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-sm text-slate-500">
               <span>
                 Domanda {currentIndex + 1} di {questionSet.length}
               </span>
-              <span>{progress}% completato</span>
+              <button
+                type="button"
+                onClick={() => setShowInfo((prev) => !prev)}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-600 transition hover:border-slate-400"
+                aria-label="Mostra informazioni"
+              >
+                i
+              </button>
             </div>
             <Progress value={progress} />
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-              <span>Versione: {quizVariants[variant].label}</span>
-              <span>Tempo stimato: ~{estimatedMinutes} min</span>
-              <span>
-                Risposte: {answeredCount}/{questionSet.length}
-              </span>
-            </div>
           </div>
+          {showInfo && (
+            <div className="absolute inset-x-6 top-16 z-10 rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-lg">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap gap-3">
+                  <span>Completamento: {progress}%</span>
+                  <span>Versione: {quizVariants[variant].label}</span>
+                  <span>Tempo stimato: ~{estimatedMinutes} min</span>
+                  <span>
+                    Risposte: {answeredCount}/{questionSet.length}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowInfo(false)}
+                  className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-500"
+                >
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-6 space-y-3">
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
@@ -461,15 +486,20 @@ export default function TestClient() {
               <h1 className="text-xl font-semibold text-slate-900">
                 {currentQuestion.text}
               </h1>
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-slate-500 sm:block">
                 Swipe a destra per Sì, a sinistra per No. Puoi usare anche i
                 tasti S/N.
               </p>
+              <p className="mt-2 text-xs text-slate-500 sm:hidden">
+                Swipe → Sì, ← No.
+              </p>
             </div>
-            <p className="text-xs text-slate-500">
-              Suggerimento: puoi trascinare la card oppure usare i pulsanti
-              sotto.
-            </p>
+            {showHint && currentIndex === 0 && (
+              <p className="text-xs text-slate-500">
+                Suggerimento: puoi trascinare la card oppure usare i pulsanti
+                sotto.
+              </p>
+            )}
           </div>
 
           {showSaved && (
