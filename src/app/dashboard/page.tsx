@@ -7,12 +7,28 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { colorMeta, quizVariants, type Color, type QuizVariant } from "@/lib/quiz";
-import {
-  getTestResults,
-  getTestResultsRemote,
-  type TestResult,
-} from "@/lib/storage";
-import { isSupabaseEnabled } from "@/lib/supabaseClient";
+import { callAdminFunction } from "@/lib/adminApi";
+import { getAdminSession } from "@/lib/adminSession";
+import { normalizeSummary, type TestResult } from "@/lib/storage";
+import { useRouter } from "next/navigation";
+
+type AdminTestRow = {
+  id: string;
+  email: string;
+  created_at: string;
+  started_at: string | null;
+  duration_ms: number | null;
+  variant: string | null;
+  cohort: string | null;
+  cohort_id: string | null;
+  referrer_id: string | null;
+  invite_code: string | null;
+  unlock_at: string | null;
+  unlocked_at: string | null;
+  answers: Record<string, number> | string;
+  summary: unknown;
+  question_count: number;
+};
 
 type ColorCounts = Record<Color, number>;
 
@@ -24,21 +40,57 @@ const emptyColorCounts = (): ColorCounts => ({
 });
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [results, setResults] = useState<TestResult[]>([]);
   const [remoteError, setRemoteError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      if (isSupabaseEnabled) {
-        const { results: remote, error } = await getTestResultsRemote();
-        setResults(remote);
-        setRemoteError(error ?? null);
-      } else {
-        setResults(getTestResults());
+      const session = getAdminSession();
+      if (!session) {
+        router.replace("/admin/login");
+        return;
+      }
+      try {
+        const { results: raw } = await callAdminFunction<{
+          results: AdminTestRow[];
+        }>("admin-list-tests");
+        const mapped = raw.map((row) => {
+          const answers =
+            typeof row.answers === "string" ? JSON.parse(row.answers) : row.answers;
+          const summary =
+            typeof row.summary === "string"
+              ? JSON.parse(row.summary)
+              : row.summary;
+          return {
+            id: row.id,
+            email: row.email,
+            createdAt: row.created_at,
+            startedAt: row.started_at ?? undefined,
+            durationMs: row.duration_ms ?? undefined,
+            variant:
+              row.variant === "short" ? "short" : row.variant ? "full" : undefined,
+            cohort: row.cohort ?? undefined,
+            cohortId: row.cohort_id ?? undefined,
+            referrerId: row.referrer_id ?? undefined,
+            inviteCode: row.invite_code ?? undefined,
+            unlockAt: row.unlock_at ?? undefined,
+            unlockedAt: row.unlocked_at ?? undefined,
+            answers,
+            summary: normalizeSummary(summary as object),
+            questionCount: row.question_count,
+          } as TestResult;
+        });
+        setResults(mapped);
+        setRemoteError(null);
+      } catch (error) {
+        setRemoteError(
+          error instanceof Error ? error.message : "Errore caricamento",
+        );
       }
     };
     void load();
-  }, []);
+  }, [router]);
 
   const stats = useMemo(() => {
     const total = results.length;
@@ -136,8 +188,7 @@ export default function DashboardPage() {
           </div>
           {remoteError && (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-              Errore Supabase: {remoteError}. Verifica policy di lettura o
-              configurazione.
+              Errore: {remoteError}
             </div>
           )}
         </Card>
