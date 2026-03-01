@@ -245,6 +245,11 @@ export default function AdminClient() {
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-700">Coorti</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_150px_auto]">
+              <div className="sm:col-span-3 grid gap-1">
+                <span className="text-xs text-slate-500">
+                  Crea una coorte con un timebox per i risultati.
+                </span>
+              </div>
               <Input
                 placeholder="Nome coorte"
                 value={cohortName}
@@ -288,6 +293,9 @@ export default function AdminClient() {
                     </div>
                   </div>
                   <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_120px]">
+                    <span className="text-[11px] text-slate-500 sm:col-span-2">
+                      Modifica nome e delay (minuti) della coorte selezionata.
+                    </span>
                     <Input
                       value={editCohorts[cohort.id] ?? cohort.name}
                       onChange={(event) =>
@@ -323,6 +331,11 @@ export default function AdminClient() {
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-700">Inviti</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <div className="sm:col-span-2 grid gap-1">
+                <span className="text-xs text-slate-500">
+                  Seleziona una coorte e genera un link referral dedicato.
+                </span>
+              </div>
               <select
                 className="h-10 rounded-md border border-slate-200 px-3 text-sm"
                 value={inviteCohort}
@@ -380,6 +393,10 @@ export default function AdminClient() {
         <section className="grid gap-4 lg:grid-cols-2">
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-700">Test recenti</h2>
+            <p className="mt-2 text-xs text-slate-500">
+              “Elimina” rimuove il singolo test. “Elimina per email” rimuove
+              tutti i test associati a quella email.
+            </p>
             <div className="mt-4 space-y-3">
               {tests.map((test) => {
                 const duration = test.duration_ms
@@ -457,6 +474,11 @@ export default function AdminClient() {
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-700">Admin users</h2>
           <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <div className="sm:col-span-3 grid gap-1">
+              <span className="text-xs text-slate-500">
+                Crea nuovi admin o aggiorna password/attivazione.
+              </span>
+            </div>
             <Input
               placeholder="Nuovo username"
               value={adminUsername}
