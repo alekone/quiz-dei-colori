@@ -16,9 +16,10 @@ import {
 import {
   clearTestDraft,
   clearReferrerId,
+  getUserCohort,
+  getTestDraft,
   getTestDraftForEmail,
   getReferrerId,
-  getUserCohort,
   getUserEmail,
   saveTestDraft,
   saveTestResult,
@@ -26,6 +27,7 @@ import {
   type TestDraft,
   type TestResult,
 } from "@/lib/storage";
+import { getCohortInfo } from "@/lib/cohorts";
 import { QuadrantChart } from "@/components/quadrant-chart";
 
 export default function TestClient() {
@@ -72,6 +74,10 @@ export default function TestClient() {
 
   useEffect(() => {
     const email = getUserEmail();
+    const rawDraft = getTestDraft();
+    if (email && rawDraft && rawDraft.email !== email) {
+      clearTestDraft();
+    }
     const existing = email ? getTestDraftForEmail(email) : null;
     if (
       existing &&
@@ -122,6 +128,13 @@ export default function TestClient() {
       Date.now() - new Date(startedAt).getTime(),
     );
     const referrerId = getReferrerId() ?? undefined;
+    const cohortInfo = getCohortInfo();
+    const unlockAt =
+      cohortInfo?.unlockDelayMinutes && cohortInfo.unlockDelayMinutes > 0
+        ? new Date(
+            Date.now() + cohortInfo.unlockDelayMinutes * 60 * 1000,
+          ).toISOString()
+        : undefined;
     const result: TestResult = {
       id: typeof crypto !== "undefined" ? crypto.randomUUID() : String(Date.now()),
       email,
@@ -129,7 +142,10 @@ export default function TestClient() {
       startedAt,
       durationMs,
       variant,
-      cohort: getUserCohort() ?? undefined,
+      cohort: cohortInfo?.cohortName ?? getUserCohort() ?? undefined,
+      cohortId: cohortInfo?.cohortId ?? undefined,
+      inviteCode: cohortInfo?.inviteCode ?? undefined,
+      unlockAt,
       referrerId,
       answers: nextAnswers,
       summary,

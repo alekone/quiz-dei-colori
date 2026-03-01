@@ -18,6 +18,7 @@ export default function ResultClient() {
   const resultId = searchParams.get("rid");
   const [result, setResult] = useState<TestResult | null>(null);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
+  const [unlockRemainingMs, setUnlockRemainingMs] = useState<number | null>(null);
 
   useEffect(() => {
     if (!resultId) return;
@@ -28,6 +29,25 @@ export default function ResultClient() {
     }
     setResult(stored);
   }, [resultId, router]);
+
+  useEffect(() => {
+    if (!result?.unlockAt) {
+      setUnlockRemainingMs(null);
+      return;
+    }
+    const unlockAt = Date.parse(result.unlockAt);
+    if (Number.isNaN(unlockAt)) {
+      setUnlockRemainingMs(null);
+      return;
+    }
+    const update = () => {
+      const diff = unlockAt - Date.now();
+      setUnlockRemainingMs(diff > 0 ? diff : 0);
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [result?.unlockAt]);
 
   const formattedDate = useMemo(() => {
     if (!result) return "";
@@ -391,6 +411,30 @@ export default function ResultClient() {
         <main className="mx-auto flex w-full max-w-lg flex-col gap-4">
           <Card className="p-6 text-center text-sm text-slate-600">
             Caricamento risultato...
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
+  if (unlockRemainingMs !== null && unlockRemainingMs > 0) {
+    const totalSeconds = Math.ceil(unlockRemainingMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return (
+      <div className="min-h-screen px-5 py-10">
+        <main className="mx-auto flex w-full max-w-lg flex-col gap-4">
+          <Card className="p-6 text-center text-sm text-slate-600">
+            <p className="text-base font-semibold text-slate-900">
+              Risultati in arrivo
+            </p>
+            <p className="mt-2">
+              I risultati della tua coorte saranno disponibili tra{" "}
+              <span className="font-semibold text-slate-900">
+                {minutes}m {seconds}s
+              </span>
+              .
+            </p>
           </Card>
         </main>
       </div>

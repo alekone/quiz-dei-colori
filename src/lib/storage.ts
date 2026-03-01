@@ -9,6 +9,10 @@ export type TestResult = {
   durationMs?: number;
   variant?: QuizVariant;
   cohort?: string;
+  cohortId?: string;
+  inviteCode?: string;
+  unlockAt?: string;
+  unlockedAt?: string;
   referrerId?: string;
   answers: Record<string, number>;
   summary: ScoreSummary;
@@ -23,7 +27,11 @@ type TestResultRow = {
   duration_ms: number | null;
   variant: string | null;
   cohort: string | null;
+  cohort_id: string | null;
   referrer_id: string | null;
+  invite_code: string | null;
+  unlock_at: string | null;
+  unlocked_at: string | null;
   answers: Record<string, number>;
   summary: ScoreSummary;
   question_count: number;
@@ -38,7 +46,7 @@ const DRAFT_KEY = "qc_test_draft";
 const isBrowser = () => typeof window !== "undefined";
 const colors: Color[] = ["rosso", "giallo", "verde", "blu"];
 
-const normalizeSummary = (summary: Partial<ScoreSummary>): ScoreSummary => {
+export const normalizeSummary = (summary: Partial<ScoreSummary>): ScoreSummary => {
   const scores = summary.scores ?? {
     rosso: 0,
     giallo: 0,
@@ -205,7 +213,11 @@ export const saveTestResultRemote = async (result: TestResult) => {
     duration_ms: result.durationMs ?? null,
     variant: result.variant ?? null,
     cohort: result.cohort ?? null,
+    cohort_id: result.cohortId ?? null,
     referrer_id: result.referrerId ?? null,
+    invite_code: result.inviteCode ?? null,
+    unlock_at: result.unlockAt ?? null,
+    unlocked_at: result.unlockedAt ?? null,
     answers: result.answers,
     summary: result.summary,
     question_count: result.questionCount,
@@ -251,7 +263,11 @@ export const getTestResultsRemote = async (): Promise<{
         variant:
           row.variant === "short" ? "short" : row.variant ? "full" : undefined,
         cohort: row.cohort ?? undefined,
+        cohortId: row.cohort_id ?? undefined,
         referrerId: row.referrer_id ?? undefined,
+        inviteCode: row.invite_code ?? undefined,
+        unlockAt: row.unlock_at ?? undefined,
+        unlockedAt: row.unlocked_at ?? undefined,
         answers,
         summary: normalizeSummary(summary),
         questionCount: row.question_count,
@@ -295,7 +311,11 @@ export const getTestResultsRemoteByEmail = async (
     durationMs: row.duration_ms ?? undefined,
     variant: row.variant === "short" ? "short" : row.variant ? "full" : undefined,
     cohort: row.cohort ?? undefined,
+    cohortId: row.cohort_id ?? undefined,
     referrerId: row.referrer_id ?? undefined,
+    inviteCode: row.invite_code ?? undefined,
+    unlockAt: row.unlock_at ?? undefined,
+    unlockedAt: row.unlocked_at ?? undefined,
     answers: row.answers,
     summary: normalizeSummary(
       typeof row.summary === "string" ? JSON.parse(row.summary) : row.summary,

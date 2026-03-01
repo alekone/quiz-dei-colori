@@ -1,35 +1,3 @@
-create table if not exists public.test_results (
-  id uuid primary key,
-  email text not null,
-  created_at timestamptz not null default now(),
-  started_at timestamptz,
-  duration_ms integer,
-  variant text,
-  cohort text,
-  cohort_id uuid references public.cohorts(id) on delete set null,
-  referrer_id text,
-  invite_code text,
-  unlock_at timestamptz,
-  unlocked_at timestamptz,
-  answers jsonb not null,
-  summary jsonb not null,
-  question_count integer not null
-);
-
-alter table public.test_results enable row level security;
-
-create policy "public insert for tests"
-  on public.test_results
-  for insert
-  to anon
-  with check (true);
-
-create policy "public delete for tests"
-  on public.test_results
-  for delete
-  to anon
-  using (true);
-
 create table if not exists public.admin_users (
   id uuid primary key default gen_random_uuid(),
   username text not null unique,
@@ -66,24 +34,22 @@ alter table public.admin_sessions enable row level security;
 alter table public.cohorts enable row level security;
 alter table public.cohort_invites enable row level security;
 
-create extension if not exists pgcrypto;
+alter table public.test_results
+  add column if not exists cohort_id uuid references public.cohorts(id) on delete set null,
+  add column if not exists invite_code text,
+  add column if not exists unlock_at timestamptz,
+  add column if not exists unlocked_at timestamptz;
 
-create or replace function public.admin_authenticate(
-  p_username text,
-  p_password text
-)
-returns table (
-  id uuid,
-  username text,
-  is_active boolean
-)
-language sql
-security definer
-set search_path = public
-as $$
-  select id, username, is_active
-  from public.admin_users
-  where username = lower(p_username)
-    and password_hash = crypt(p_password, password_hash)
-  limit 1;
-$$;
+create index if not exists test_results_cohort_id_idx
+  on public.test_results (cohort_id);
+
+create index if not exists test_results_unlock_at_idx
+  on public.test_results (unlock_at);
+
+create index if not exists test_results_invite_code_idx
+  on public.test_results (invite_code);
+
+create index if not exists cohort_invites_cohort_id_idx
+  on public.cohort_invites (cohort_id);
+
+drop policy if exists "public read for tests" on public.test_results;
