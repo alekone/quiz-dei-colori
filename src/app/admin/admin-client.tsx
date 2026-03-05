@@ -21,6 +21,7 @@ type AdminTestRow = {
   invite_code: string | null;
   unlock_at: string | null;
   question_count: number;
+  answers?: Record<string, number> | string;
 };
 
 type CohortRow = {
@@ -226,6 +227,9 @@ export default function AdminClient() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/history">Storico completo</Link>
+            </Button>
             <Button variant="outline" onClick={loadAll} disabled={loading}>
               Aggiorna dati
             </Button>
@@ -402,6 +406,14 @@ export default function AdminClient() {
                 const duration = test.duration_ms
                   ? Math.max(1, Math.round(test.duration_ms / 60000))
                   : null;
+                const answerCount =
+                  typeof test.answers === "string"
+                    ? Object.keys(JSON.parse(test.answers)).length
+                    : test.answers
+                      ? Object.keys(test.answers).length
+                      : 0;
+                const isCompleted =
+                  test.question_count > 0 && answerCount >= test.question_count;
                 return (
                   <div
                     key={test.id}
@@ -410,12 +422,22 @@ export default function AdminClient() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <div className="text-sm font-semibold text-slate-900">
-                          {test.email}
+                          <Link
+                            href={`/result?rid=${test.id}`}
+                            className="hover:underline"
+                          >
+                            {test.email}
+                          </Link>
                         </div>
                         <div className="text-xs text-slate-500">
                           {new Date(test.created_at).toLocaleString("it-IT")}
                           {test.cohort ? ` · ${test.cohort}` : ""}
                           {duration ? ` · ${duration} min` : ""}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {isCompleted
+                            ? "Completato"
+                            : `In sospeso: ${answerCount}/${test.question_count}`}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">

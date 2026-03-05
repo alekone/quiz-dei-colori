@@ -5,6 +5,7 @@ type Payload = {
   offset?: number;
   email?: string;
   cohortId?: string;
+  id?: string;
 };
 
 Deno.serve(async (req) => {
@@ -19,13 +20,17 @@ Deno.serve(async (req) => {
     return json({ error: guard.error }, guard.status);
   }
 
-  const { limit = 200, offset = 0, email, cohortId } = await getBody<Payload>(req);
+  const { limit = 200, offset = 0, email, cohortId, id } =
+    await getBody<Payload>(req);
   let query = supabase
     .from("test_results")
     .select("*")
     .order("created_at", { ascending: false })
     .range(offset, offset + Math.min(limit, 500) - 1);
 
+  if (id) {
+    query = query.eq("id", id);
+  }
   if (email) {
     query = query.eq("email", email.trim().toLowerCase());
   }

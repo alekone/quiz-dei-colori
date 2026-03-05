@@ -10,7 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { QuadrantChart } from "@/components/quadrant-chart";
 import { colorMeta, quizVariants, type Color } from "@/lib/quiz";
-import { getTestResultById, type TestResult } from "@/lib/storage";
+import { callAdminFunction } from "@/lib/adminApi";
+import { getAdminSession } from "@/lib/adminSession";
+import { getTestResultById, normalizeSummary, type TestResult } from "@/lib/storage";
 
 export default function ResultClient() {
   const router = useRouter();
@@ -23,11 +25,52 @@ export default function ResultClient() {
   useEffect(() => {
     if (!resultId) return;
     const stored = getTestResultById(resultId);
-    if (!stored) {
+    if (stored) {
+      setResult(stored);
+      return;
+    }
+    const session = getAdminSession();
+    if (!session) {
       router.replace("/test");
       return;
     }
-    setResult(stored);
+    const loadRemote = async () => {
+      try {
+        const { results } = await callAdminFunction<{ results: any[] }>(
+          "admin-list-tests",
+          { id: resultId, limit: 1 },
+        );
+        const row = results?.[0];
+        if (!row) {
+          router.replace("/test");
+          return;
+        }
+        const answers =
+          typeof row.answers === "string" ? JSON.parse(row.answers) : row.answers;
+        const summary =
+          typeof row.summary === "string" ? JSON.parse(row.summary) : row.summary;
+        setResult({
+          id: row.id,
+          email: row.email,
+          createdAt: row.created_at,
+          startedAt: row.started_at ?? undefined,
+          durationMs: row.duration_ms ?? undefined,
+          variant: row.variant === "short" ? "short" : row.variant ? "full" : undefined,
+          cohort: row.cohort ?? undefined,
+          cohortId: row.cohort_id ?? undefined,
+          referrerId: row.referrer_id ?? undefined,
+          inviteCode: row.invite_code ?? undefined,
+          unlockAt: row.unlock_at ?? undefined,
+          unlockedAt: row.unlocked_at ?? undefined,
+          answers,
+          summary: normalizeSummary(summary),
+          questionCount: row.question_count,
+        } as TestResult);
+      } catch {
+        router.replace("/test");
+      }
+    };
+    void loadRemote();
   }, [resultId, router]);
 
   useEffect(() => {
