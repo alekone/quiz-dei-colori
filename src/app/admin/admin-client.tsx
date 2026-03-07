@@ -55,6 +55,7 @@ export default function AdminClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
   const [tests, setTests] = useState<AdminTestRow[]>([]);
   const [cohorts, setCohorts] = useState<CohortRow[]>([]);
@@ -173,6 +174,23 @@ export default function AdminClient() {
   const handleRevokeInvite = async (inviteId: string) => {
     await callAdminFunction("admin-revoke-invite", { id: inviteId });
     await loadAll();
+  };
+
+  const handleCopyInvite = async (code: string) => {
+    const base =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://test.mininno.com";
+    const referralPath = process.env.NEXT_PUBLIC_REFERRAL_PATH ?? "/quiz-colori";
+    const normalizedPath = `/${referralPath}`.replace(/\/{2,}/g, "/");
+    const url = `${base}${normalizedPath}?ref=${encodeURIComponent(code)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setInviteStatus("Link invito copiato.");
+    } catch {
+      setInviteStatus("Copia non riuscita.");
+    }
+    window.setTimeout(() => setInviteStatus(null), 2000);
   };
 
   const handleDeleteTest = async (id: string) => {
@@ -354,6 +372,9 @@ export default function AdminClient() {
               </select>
               <Button onClick={handleCreateInvite}>Genera invito</Button>
             </div>
+            {inviteStatus && (
+              <p className="mt-2 text-xs text-slate-500">{inviteStatus}</p>
+            )}
             <div className="mt-4 space-y-3">
               {invites.map((invite) => (
                 <div
@@ -375,6 +396,13 @@ export default function AdminClient() {
                     ) : (
                       <Badge variant="secondary">Attivo</Badge>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCopyInvite(invite.code)}
+                    >
+                      Copia link
+                    </Button>
                     {!invite.revoked_at && (
                       <Button
                         size="sm"

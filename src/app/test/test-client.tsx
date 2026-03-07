@@ -45,6 +45,7 @@ export default function TestClient() {
   const [draft, setDraft] = useState<TestDraft | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
   const [lastBreakAt, setLastBreakAt] = useState<number | null>(null);
   const [dragX, setDragX] = useState(0);
   const [dragY, setDragY] = useState(0);
@@ -55,6 +56,7 @@ export default function TestClient() {
   const [isEntering, setIsEntering] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showHint, setShowHint] = useState(true);
+  const [flashDir, setFlashDir] = useState<"left" | "right" | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dragStartX = useRef(0);
   const dragStartY = useRef(0);
@@ -84,8 +86,10 @@ export default function TestClient() {
       existing.variant === variant &&
       Object.keys(existing.answers).length > 0
     ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(existing);
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(null);
     }
     setAnswers({});
@@ -103,13 +107,19 @@ export default function TestClient() {
   const canSubmit = answeredCount === questionSet.length;
   const remainingCount = questionSet.length - answeredCount;
   const estimatedMinutes = Math.max(1, Math.ceil((remainingCount * 20) / 60));
-  const showSaved =
-    savedAt !== null && Date.now() - savedAt < 1500;
   const showBreak =
     answeredCount > 0 &&
     answeredCount % 20 === 0 &&
     answeredCount !== lastBreakAt &&
     !isLast;
+
+  useEffect(() => {
+    if (savedAt === null) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowSaved(true);
+    const timer = window.setTimeout(() => setShowSaved(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [savedAt]);
 
   const handleNext = () => {
     if (isLast) return;
@@ -188,6 +198,27 @@ export default function TestClient() {
     }
   };
 
+  const triggerSwipe = (dir: "left" | "right") => {
+    if (isSwipingOut) return;
+    const width = cardRef.current?.offsetWidth ?? 320;
+    setSwipeDir(dir);
+    setFlashDir(dir);
+    setIsSwipingOut(true);
+    setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
+    setDragY(0);
+    window.setTimeout(() => {
+      setIsSwipingOut(false);
+      setDragX(0);
+      setDragY(0);
+      setSwipeDir("none");
+      setFlashDir(null);
+      commitAnswer(dir === "right" ? 1 : 0, { autoAdvance: true });
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(10);
+      }
+    }, 260);
+  };
+
   const summaryPreview = useMemo(() => {
     if (!answeredCount) return null;
     return scoreAnswers(answers, questionSet);
@@ -216,7 +247,9 @@ export default function TestClient() {
     if (lastSwipeDir.current === "none") return;
     const direction = lastSwipeDir.current;
     const offset = direction === "left" ? 60 : -60;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsEntering(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnterOffset(offset);
     const frame = window.requestAnimationFrame(() => {
       setIsEntering(false);
@@ -353,25 +386,6 @@ export default function TestClient() {
     lastMoveTime.current = performance.now();
   };
 
-  const triggerSwipe = (dir: "left" | "right") => {
-    if (isSwipingOut) return;
-    const width = cardRef.current?.offsetWidth ?? 320;
-    setSwipeDir(dir);
-    setIsSwipingOut(true);
-    setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
-    setDragY(0);
-    window.setTimeout(() => {
-      setIsSwipingOut(false);
-      setDragX(0);
-      setDragY(0);
-      setSwipeDir("none");
-      commitAnswer(dir === "right" ? 1 : 0, { autoAdvance: true });
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        navigator.vibrate(10);
-      }
-    }, 160);
-  };
-
   const handlePointerUp = () => {
     if (!isDragging) return;
     setIsDragging(false);
@@ -399,7 +413,15 @@ export default function TestClient() {
     isDragging || isEntering ? "none" : "transform 180ms ease";
 
   return (
-    <div className="min-h-screen px-5 py-10">
+    <div
+      className={`min-h-screen px-5 py-10 transition-colors duration-400 ${
+        flashDir === "right"
+          ? "bg-emerald-50"
+          : flashDir === "left"
+            ? "bg-rose-50"
+            : "bg-white"
+      }`}
+    >
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
           ← Torna alla home

@@ -9,26 +9,45 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { QuadrantChart } from "@/components/quadrant-chart";
-import { colorMeta, quizVariants, type Color } from "@/lib/quiz";
+import { colorMeta, quizVariants, type Color, type ScoreSummary } from "@/lib/quiz";
 import { callAdminFunction } from "@/lib/adminApi";
 import { getAdminSession } from "@/lib/adminSession";
 import { getTestResultById, normalizeSummary, type TestResult } from "@/lib/storage";
+
+type AdminTestRow = {
+  id: string;
+  email: string;
+  created_at: string;
+  started_at: string | null;
+  duration_ms: number | null;
+  variant: string | null;
+  cohort: string | null;
+  cohort_id: string | null;
+  referrer_id: string | null;
+  invite_code: string | null;
+  unlock_at: string | null;
+  unlocked_at: string | null;
+  answers: Record<string, number> | string;
+  summary: Partial<ScoreSummary> | string;
+  question_count: number;
+};
 
 export default function ResultClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resultId = searchParams.get("rid");
-  const [result, setResult] = useState<TestResult | null>(null);
+  const [remoteResult, setRemoteResult] = useState<TestResult | null>(null);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [unlockRemainingMs, setUnlockRemainingMs] = useState<number | null>(null);
+  const storedResult = useMemo(
+    () => (resultId ? getTestResultById(resultId) : null),
+    [resultId],
+  );
+  const result = storedResult ?? remoteResult;
 
   useEffect(() => {
     if (!resultId) return;
-    const stored = getTestResultById(resultId);
-    if (stored) {
-      setResult(stored);
-      return;
-    }
+    if (storedResult) return;
     const session = getAdminSession();
     if (!session) {
       router.replace("/test");
@@ -36,7 +55,7 @@ export default function ResultClient() {
     }
     const loadRemote = async () => {
       try {
-        const { results } = await callAdminFunction<{ results: any[] }>(
+        const { results } = await callAdminFunction<{ results: AdminTestRow[] }>(
           "admin-list-tests",
           { id: resultId, limit: 1 },
         );
@@ -49,7 +68,7 @@ export default function ResultClient() {
           typeof row.answers === "string" ? JSON.parse(row.answers) : row.answers;
         const summary =
           typeof row.summary === "string" ? JSON.parse(row.summary) : row.summary;
-        setResult({
+        setRemoteResult({
           id: row.id,
           email: row.email,
           createdAt: row.created_at,
@@ -71,15 +90,17 @@ export default function ResultClient() {
       }
     };
     void loadRemote();
-  }, [resultId, router]);
+  }, [resultId, router, storedResult]);
 
   useEffect(() => {
     if (!result?.unlockAt) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUnlockRemainingMs(null);
       return;
     }
     const unlockAt = Date.parse(result.unlockAt);
     if (Number.isNaN(unlockAt)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUnlockRemainingMs(null);
       return;
     }
