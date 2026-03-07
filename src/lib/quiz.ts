@@ -778,7 +778,6 @@ export const scoreAnswers = (
   );
 
   const topPercent = percentages[orderedColors[0]];
-  const secondPercent = percentages[orderedColors[1]];
   const balanced = orderedColors.every(
     (color) => percentages[color] === topPercent,
   );

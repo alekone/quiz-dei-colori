@@ -1,4 +1,3 @@
-/* eslint-disable no-nested-ternary */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";

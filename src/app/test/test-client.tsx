@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -39,16 +39,30 @@ export default function TestClient() {
     () => getQuestionsForVariant(variant),
     [variant],
   );
+  const computeInitialDraft = () => {
+    const email = getUserEmail();
+    const rawDraft = getTestDraft();
+    if (email && rawDraft && rawDraft.email !== email) {
+      clearTestDraft();
+    }
+    const existing = email ? getTestDraftForEmail(email) : null;
+    if (
+      existing &&
+      existing.variant === variant &&
+      Object.keys(existing.answers).length > 0
+    ) {
+      return existing;
+    }
+    return null;
+  };
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
-  const [draft, setDraft] = useState<TestDraft | null>(null);
+  const [draft, setDraft] = useState<TestDraft | null>(() => computeInitialDraft());
   const [hasStarted, setHasStarted] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [showSaved, setShowSaved] = useState(false);
   const [lastBreakAt, setLastBreakAt] = useState<number | null>(null);
   const [dragX, setDragX] = useState(0);
-  const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [swipeDir, setSwipeDir] = useState<"left" | "right" | "none">("none");
   const [isSwipingOut, setIsSwipingOut] = useState(false);
@@ -63,7 +77,7 @@ export default function TestClient() {
   const dragStartTime = useRef(0);
   const lastMoveX = useRef(0);
   const lastMoveTime = useRef(0);
-  const lastSwipeDir = useRef<"left" | "right" | "none">("none");
+  const savedTimerRef = useRef<number | null>(null);
   const currentQuestion = questionSet[currentIndex];
   const selectedWeight = answers[currentQuestion.id];
 
@@ -74,30 +88,6 @@ export default function TestClient() {
     }
   }, [router]);
 
-  useEffect(() => {
-    const email = getUserEmail();
-    const rawDraft = getTestDraft();
-    if (email && rawDraft && rawDraft.email !== email) {
-      clearTestDraft();
-    }
-    const existing = email ? getTestDraftForEmail(email) : null;
-    if (
-      existing &&
-      existing.variant === variant &&
-      Object.keys(existing.answers).length > 0
-    ) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDraft(existing);
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDraft(null);
-    }
-    setAnswers({});
-    setCurrentIndex(0);
-    setHasStarted(false);
-    setStartedAt(new Date().toISOString());
-    setLastBreakAt(null);
-  }, [variant]);
 
   const answeredCount = Object.keys(answers).length;
   const progress = Math.round((answeredCount / questionSet.length) * 100);
@@ -113,24 +103,26 @@ export default function TestClient() {
     answeredCount !== lastBreakAt &&
     !isLast;
 
-  useEffect(() => {
-    if (savedAt === null) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setShowSaved(true);
-    const timer = window.setTimeout(() => setShowSaved(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [savedAt]);
+  const startEnter = useCallback((direction: "left" | "right") => {
+    setIsEntering(true);
+    setEnterOffset(direction === "left" ? 60 : -60);
+    window.requestAnimationFrame(() => {
+      setIsEntering(false);
+      setEnterOffset(0);
+    });
+  }, []);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     if (isLast) return;
+    startEnter("right");
     setCurrentIndex((prev) => Math.min(prev + 1, questionSet.length - 1));
-  };
+  }, [isLast, questionSet.length, startEnter]);
 
   const handlePrevious = () => {
     setCurrentIndex((prev) => Math.max(prev - 1, 0));
   };
 
-  const finishWithAnswers = (nextAnswers: Record<string, number>) => {
+  const finishWithAnswers = useCallback((nextAnswers: Record<string, number>) => {
     const email = getUserEmail() ?? "utente@demo.test";
     const summary = scoreAnswers(nextAnswers, questionSet);
     const durationMs = Math.max(
@@ -166,9 +158,9 @@ export default function TestClient() {
     clearTestDraft();
     clearReferrerId();
     router.push(`/result?rid=${result.id}`);
-  };
+  }, [questionSet, router, startedAt, variant]);
 
-  const commitAnswer = (
+  const commitAnswer = useCallback((
     weight: number,
     options: { autoAdvance?: boolean } = {},
   ) => {
@@ -183,11 +175,15 @@ export default function TestClient() {
     };
     setAnswers(nextAnswers);
     setHasStarted(true);
-    setSavedAt(Date.now());
     setShowHint(false);
+    if (savedTimerRef.current) {
+      window.clearTimeout(savedTimerRef.current);
+    }
+    setShowSaved(true);
+    savedTimerRef.current = window.setTimeout(() => setShowSaved(false), 1500);
 
     if (options.autoAdvance) {
-      lastSwipeDir.current = weight === 1 ? "right" : "left";
+      startEnter(weight === 1 ? "right" : "left");
       if (isLast) {
         if (Object.keys(nextAnswers).length === questionSet.length) {
           finishWithAnswers(nextAnswers);
@@ -196,20 +192,27 @@ export default function TestClient() {
         setCurrentIndex((prev) => Math.min(prev + 1, questionSet.length - 1));
       }
     }
-  };
+  }, [
+    answers,
+    currentQuestion.id,
+    draft,
+    finishWithAnswers,
+    hasStarted,
+    isLast,
+    questionSet.length,
+    startEnter,
+  ]);
 
-  const triggerSwipe = (dir: "left" | "right") => {
+  const triggerSwipe = useCallback((dir: "left" | "right") => {
     if (isSwipingOut) return;
     const width = cardRef.current?.offsetWidth ?? 320;
     setSwipeDir(dir);
     setFlashDir(dir);
     setIsSwipingOut(true);
     setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
-    setDragY(0);
     window.setTimeout(() => {
       setIsSwipingOut(false);
       setDragX(0);
-      setDragY(0);
       setSwipeDir("none");
       setFlashDir(null);
       commitAnswer(dir === "right" ? 1 : 0, { autoAdvance: true });
@@ -217,17 +220,17 @@ export default function TestClient() {
         navigator.vibrate(10);
       }
     }, 260);
-  };
+  }, [commitAnswer, isSwipingOut]);
 
   const summaryPreview = useMemo(() => {
     if (!answeredCount) return null;
     return scoreAnswers(answers, questionSet);
   }, [answeredCount, answers, questionSet]);
 
-  const handleFinish = () => {
+  const handleFinish = useCallback(() => {
     if (!canSubmit) return;
     finishWithAnswers(answers);
-  };
+  }, [answers, canSubmit, finishWithAnswers]);
 
   useEffect(() => {
     if (!hasStarted) return;
@@ -244,20 +247,12 @@ export default function TestClient() {
   }, [answers, currentIndex, hasStarted, startedAt, variant]);
 
   useEffect(() => {
-    if (lastSwipeDir.current === "none") return;
-    const direction = lastSwipeDir.current;
-    const offset = direction === "left" ? 60 : -60;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsEntering(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEnterOffset(offset);
-    const frame = window.requestAnimationFrame(() => {
-      setIsEntering(false);
-      setEnterOffset(0);
-    });
-    lastSwipeDir.current = "none";
-    return () => window.cancelAnimationFrame(frame);
-  }, [currentQuestion.id]);
+    return () => {
+      if (savedTimerRef.current) {
+        window.clearTimeout(savedTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -293,6 +288,7 @@ export default function TestClient() {
     handleNext,
     isLast,
     selectedWeight,
+    triggerSwipe,
   ]);
 
   const handleResume = () => {
@@ -301,7 +297,7 @@ export default function TestClient() {
     setCurrentIndex(Math.min(draft.currentIndex, questionSet.length - 1));
     setStartedAt(draft.startedAt);
     setHasStarted(true);
-    setSavedAt(null);
+    setShowSaved(false);
   };
 
   const handleRestart = () => {
@@ -363,7 +359,6 @@ export default function TestClient() {
     lastMoveTime.current = dragStartTime.current;
     setIsDragging(true);
     setDragX(0);
-    setDragY(0);
     setSwipeDir("none");
     setShowHint(false);
   };
@@ -375,12 +370,10 @@ export default function TestClient() {
     const isMostlyHorizontal = Math.abs(deltaX) > Math.abs(deltaY) * 0.8;
     if (!isMostlyHorizontal) {
       setDragX(0);
-      setDragY(0);
       updateSwipeDir(0);
       return;
     }
     setDragX(deltaX);
-    setDragY(deltaY);
     updateSwipeDir(deltaX);
     lastMoveX.current = event.clientX;
     lastMoveTime.current = performance.now();
@@ -402,7 +395,6 @@ export default function TestClient() {
       triggerSwipe(dir);
     } else {
       setDragX(0);
-      setDragY(0);
       setSwipeDir("none");
     }
   };

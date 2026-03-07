@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,33 +25,25 @@ export default function OnboardingFlow() {
   const dragStartY = useRef(0);
   const dragStartTime = useRef(0);
 
-  const [teaserQuestion, setTeaserQuestion] = useState(() => {
+  const seedId = useId();
+  const teaserQuestion = useMemo(() => {
     const questions = getQuestionsForVariant(variant);
-    return questions[0];
-  });
-  const [isMounted, setIsMounted] = useState(false);
+    let hash = 0;
+    for (let i = 0; i < seedId.length; i += 1) {
+      hash = (hash * 31 + seedId.charCodeAt(i)) % 100000;
+    }
+    const index = Math.abs(hash) % questions.length;
+    return questions[index];
+  }, [seedId, variant]);
 
-  const handleNext = () => {
+  const handleNext = useCallback(() => {
     setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
-  };
-
-  const handleSwipeConfirm = () => {
-    if (stepIndex >= totalSteps - 1) return;
-    handleNext();
-  };
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!isMounted) return;
-    const questions = getQuestionsForVariant(variant);
-    const randomIndex = Math.floor(Math.random() * questions.length);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTeaserQuestion(questions[randomIndex]);
-  }, [isMounted, variant]);
+  const handleSwipeConfirm = useCallback(() => {
+    if (stepIndex >= totalSteps - 1) return;
+    handleNext();
+  }, [handleNext, stepIndex]);
 
   const updateSwipeDir = (deltaX: number) => {
     if (deltaX > 12) {
@@ -88,7 +80,7 @@ export default function OnboardingFlow() {
     updateSwipeDir(deltaX);
   };
 
-  const triggerSwipe = (dir: "left" | "right") => {
+  const triggerSwipe = useCallback((dir: "left" | "right") => {
     if (isSwipingOut || stepIndex >= totalSteps - 1) return;
     setSwipeDir(dir);
     setFlashDir(dir);
@@ -101,7 +93,7 @@ export default function OnboardingFlow() {
       setFlashDir(null);
       handleSwipeConfirm();
     }, 260);
-  };
+  }, [handleSwipeConfirm, isSwipingOut, stepIndex]);
 
   useEffect(() => {
     if (stepIndex >= totalSteps - 1) return;
@@ -190,7 +182,7 @@ export default function OnboardingFlow() {
             </span>
           </div>
           <h1 className="mt-4 text-2xl font-semibold text-slate-900">
-            {isMounted ? teaserQuestion.text : "Caricamento..."}
+            {teaserQuestion.text}
           </h1>
           <p className="mt-3 text-sm text-slate-600">
             Ti senti d&apos;accordo con questa affermazione?

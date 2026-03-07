@@ -94,15 +94,13 @@ export default function ResultClient() {
 
   useEffect(() => {
     if (!result?.unlockAt) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setUnlockRemainingMs(null);
-      return;
+      const timer = window.setTimeout(() => setUnlockRemainingMs(null), 0);
+      return () => window.clearTimeout(timer);
     }
     const unlockAt = Date.parse(result.unlockAt);
     if (Number.isNaN(unlockAt)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setUnlockRemainingMs(null);
-      return;
+      const timer = window.setTimeout(() => setUnlockRemainingMs(null), 0);
+      return () => window.clearTimeout(timer);
     }
     const update = () => {
       const diff = unlockAt - Date.now();
@@ -591,7 +589,6 @@ export default function ResultClient() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {(Object.keys(result.summary.scores) as Color[]).map((color) => {
               const meta = colorMeta[color];
-              const score = result.summary.scores[color];
               const percent = result.summary.percentages[color];
               return (
                 <div
