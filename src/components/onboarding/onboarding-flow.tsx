@@ -21,6 +21,11 @@ export default function OnboardingFlow() {
   const [isDragging, setIsDragging] = useState(false);
   const [swipeDir, setSwipeDir] = useState<"left" | "right" | "none">("none");
   const [flashDir, setFlashDir] = useState<"left" | "right" | null>(null);
+  const [detourStep, setDetourStep] = useState<number | null>(null);
+  const [detourTitle, setDetourTitle] = useState(
+    "Non dovevi cliccare NO, clicca SI!",
+  );
+  const cardRef = useRef<HTMLDivElement | null>(null);
   const dragStartX = useRef(0);
   const dragStartY = useRef(0);
   const dragStartTime = useRef(0);
@@ -36,6 +41,19 @@ export default function OnboardingFlow() {
     return questions[index];
   }, [seedId, variant]);
 
+  const detourTitles = useMemo(
+    () => [
+      "Non dovevi cliccare NO, clicca SI!",
+      "Posso già dirti che hai un caratteraccio",
+      "Dai per favore, il tasto giusto è quell'altro",
+      "Non ci siamo capiti, devi scegliere SI",
+      "La risposta giusta è un'altra",
+      "La risposta giusta è dentro di te (e non è NO)",
+      "Hint: usa il tasto verde",
+    ],
+    [],
+  );
+
   const handleNext = useCallback(() => {
     setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
   }, []);
@@ -45,7 +63,18 @@ export default function OnboardingFlow() {
     handleNext();
   }, [handleNext, stepIndex]);
 
-  const updateSwipeDir = (deltaX: number) => {
+  const enterDetour = useCallback(() => {
+    setDetourStep(stepIndex);
+    const nextTitle =
+      detourTitles[Math.floor(Math.random() * detourTitles.length)];
+    setDetourTitle(nextTitle);
+  }, [detourTitles, stepIndex]);
+
+  const exitDetour = useCallback(() => {
+    setDetourStep(null);
+  }, []);
+
+  const updateSwipeDir = useCallback((deltaX: number) => {
     if (deltaX > 12) {
       setSwipeDir("right");
     } else if (deltaX < -12) {
@@ -53,7 +82,7 @@ export default function OnboardingFlow() {
     } else {
       setSwipeDir("none");
     }
-  };
+  }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (stepIndex >= totalSteps - 1 || isSwipingOut) return;
@@ -66,10 +95,10 @@ export default function OnboardingFlow() {
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   };
 
-  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+  const updateDrag = useCallback((clientX: number, clientY: number) => {
     if (!isDragging) return;
-    const deltaX = event.clientX - dragStartX.current;
-    const deltaY = event.clientY - dragStartY.current;
+    const deltaX = clientX - dragStartX.current;
+    const deltaY = clientY - dragStartY.current;
     const isMostlyHorizontal = Math.abs(deltaX) > Math.abs(deltaY) * 0.8;
     if (!isMostlyHorizontal) {
       setDragX(0);
@@ -78,22 +107,61 @@ export default function OnboardingFlow() {
     }
     setDragX(deltaX);
     updateSwipeDir(deltaX);
+  }, [isDragging, updateSwipeDir]);
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    updateDrag(event.clientX, event.clientY);
   };
 
   const triggerSwipe = useCallback((dir: "left" | "right") => {
-    if (isSwipingOut || stepIndex >= totalSteps - 1) return;
+    if (isSwipingOut) return;
+    if (detourStep !== null) {
+      const width = cardRef.current?.offsetWidth ?? 320;
+      setSwipeDir(dir);
+      setFlashDir(dir);
+      setIsSwipingOut(true);
+      setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
+      window.setTimeout(() => {
+        setIsSwipingOut(false);
+        setDragX(0);
+        setSwipeDir("none");
+        setFlashDir(null);
+        if (dir === "right") {
+          exitDetour();
+        } else {
+          const nextTitle =
+            detourTitles[Math.floor(Math.random() * detourTitles.length)];
+          setDetourTitle(nextTitle);
+        }
+      }, 450);
+      return;
+    }
+    if (stepIndex >= totalSteps - 1) return;
+    if (dir === "left" && stepIndex > 0) {
+      enterDetour();
+      return;
+    }
+    const width = cardRef.current?.offsetWidth ?? 320;
     setSwipeDir(dir);
     setFlashDir(dir);
     setIsSwipingOut(true);
-    setDragX((dir === "right" ? 1 : -1) * 360);
+    setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
     window.setTimeout(() => {
       setIsSwipingOut(false);
       setDragX(0);
       setSwipeDir("none");
       setFlashDir(null);
       handleSwipeConfirm();
-    }, 260);
-  }, [handleSwipeConfirm, isSwipingOut, stepIndex]);
+    }, 450);
+  }, [
+    detourStep,
+    detourTitles,
+    enterDetour,
+    exitDetour,
+    handleSwipeConfirm,
+    isSwipingOut,
+    stepIndex,
+  ]);
 
   useEffect(() => {
     if (stepIndex >= totalSteps - 1) return;
@@ -109,11 +177,11 @@ export default function OnboardingFlow() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [stepIndex, triggerSwipe]);
 
-  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+  const finishDrag = useCallback((clientX: number, clientY: number) => {
     if (!isDragging) return;
     setIsDragging(false);
-    const deltaX = event.clientX - dragStartX.current;
-    const deltaY = event.clientY - dragStartY.current;
+    const deltaX = clientX - dragStartX.current;
+    const deltaY = clientY - dragStartY.current;
     const isMostlyHorizontal = Math.abs(deltaX) > Math.abs(deltaY) * 0.8;
     if (!isMostlyHorizontal) {
       setDragX(0);
@@ -129,7 +197,25 @@ export default function OnboardingFlow() {
       setDragX(0);
       setSwipeDir("none");
     }
+  }, [isDragging, triggerSwipe]);
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    finishDrag(event.clientX, event.clientY);
   };
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMove = (event: PointerEvent) => updateDrag(event.clientX, event.clientY);
+    const handleUp = (event: PointerEvent) => finishDrag(event.clientX, event.clientY);
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [isDragging, updateDrag, finishDrag]);
 
   const startTest = () => {
     router.push(`/test?variant=${variant}`);
@@ -139,22 +225,82 @@ export default function OnboardingFlow() {
     -6,
     Math.min(6, dragX / 20),
   )}deg)`;
-  const cardTransition = isDragging || isSwipingOut ? "none" : "transform 260ms ease";
+  const cardTransition = isDragging || isSwipingOut ? "none" : "transform 180ms ease";
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    body.classList.remove("flash-yes", "flash-no");
+    if (flashDir === "right") {
+      body.classList.add("flash-yes");
+    } else if (flashDir === "left") {
+      body.classList.add("flash-no");
+    }
+    return () => {
+      body.classList.remove("flash-yes", "flash-no");
+    };
+  }, [flashDir]);
 
   return (
-    <div
-      className={`min-h-screen w-full transition-colors duration-400 ${
-        flashDir === "right"
-          ? "bg-emerald-50"
-          : flashDir === "left"
-            ? "bg-rose-50"
-            : "bg-transparent"
-      }`}
-    >
+    <div className="min-h-screen w-full">
       <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-6">
-        {stepIndex === 0 && (
+        {detourStep !== null && (
         <Card
-          className="relative p-6"
+          ref={cardRef}
+          className="relative p-6 swipe-card"
+          style={{ transform: cardTransform, transition: cardTransition }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+            <span
+              className={`rounded-full border px-3 py-1 transition ${
+                swipeDir === "left"
+                  ? "border-rose-500 bg-rose-50 text-rose-700"
+                  : "border-slate-200 text-slate-400"
+              }`}
+            >
+              No
+            </span>
+            <span
+              className={`rounded-full border px-3 py-1 transition ${
+                swipeDir === "right"
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 text-slate-400"
+              }`}
+            >
+              Sì
+            </span>
+          </div>
+          <h2 className="mt-4 text-2xl font-semibold text-slate-900">
+            {detourTitle}
+          </h2>
+          <p className="mt-3 text-sm text-slate-600">
+            Sono quasi sicuro che hai scelto NO per sbaglio
+          </p>
+          <p className="mt-3 text-sm text-slate-600">
+            Fai swipe a destra o premi S per tornare al test.
+          </p>
+          <div className="relative z-10 mt-6 grid grid-cols-2 gap-3">
+            <Button
+              className="cursor-pointer"
+              variant="outline"
+              onClick={() => triggerSwipe("left")}
+            >
+              No
+            </Button>
+            <Button className="cursor-pointer" onClick={() => triggerSwipe("right")}>
+              Sì
+            </Button>
+          </div>
+        </Card>
+        )}
+        {detourStep === null && stepIndex === 0 && (
+        <Card
+          ref={cardRef}
+          className="relative p-6 swipe-card"
           style={{ transform: cardTransform, transition: cardTransition }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -202,9 +348,10 @@ export default function OnboardingFlow() {
         </Card>
         )}
 
-        {stepIndex === 1 && (
+        {detourStep === null && stepIndex === 1 && (
         <Card
-          className="relative p-6"
+          ref={cardRef}
+          className="relative p-6 swipe-card"
           style={{ transform: cardTransform, transition: cardTransition }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -232,13 +379,16 @@ export default function OnboardingFlow() {
             </span>
           </div>
           <h2 className="mt-4 text-2xl font-semibold text-slate-900">
-            Che colore sei? Rosso o verde?
+            Vuoi provare a fare il test?
           </h2>
+          <p className="mt-3 text-sm text-slate-600">
+            Che colore sei? Rosso, Giallo, Verde o Blu?
+          </p>
           <p className="mt-3 text-sm text-slate-600">
             È un test di personalità che aiuta a capire come vivere meglio con
             gli altri. Richiede circa 10 minuti.
           </p>
-          <p className="mt-3 text-sm text-slate-600">Ti va di scoprirlo?</p>
+          <p className="mt-3 text-sm text-slate-600">Partiamo?</p>
           <div className="relative z-10 mt-6 grid grid-cols-2 gap-3">
             <Button
               className="cursor-pointer"
@@ -254,9 +404,10 @@ export default function OnboardingFlow() {
         </Card>
         )}
 
-        {stepIndex === 2 && (
+        {detourStep === null && stepIndex === 2 && (
         <Card
-          className="relative p-6"
+          ref={cardRef}
+          className="relative p-6 swipe-card"
           style={{ transform: cardTransform, transition: cardTransition }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -284,11 +435,11 @@ export default function OnboardingFlow() {
             </span>
           </div>
           <h2 className="text-2xl font-semibold text-slate-900">
-            Usa swipe o scorciatoie.
+            Fai swipe se hai capito come funziona
           </h2>
           <p className="mt-3 text-sm text-slate-600">
             Swipe a destra per dire Sì, swipe a sinistra per dire No. Da desktop
-            puoi usare le scorciatoie S/N.
+            puoi usare anche i tasti S/N.
           </p>
           <p className="mt-3 text-sm text-slate-600">
             Fai swipe a destra o premi S per continuare.
@@ -308,14 +459,11 @@ export default function OnboardingFlow() {
         </Card>
         )}
 
-        {stepIndex === 3 && (
+        {detourStep === null && stepIndex === 3 && (
         <Card className="p-6">
           <h2 className="text-2xl font-semibold text-slate-900">
-            Inserisci la tua email per iniziare.
+            Mi serve la tua mail per mandarti i risultati
           </h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Il gruppo viene compilato automaticamente se arrivi da un invito.
-          </p>
           <div className="mt-4">
             <LoginForm
               variant={variant}

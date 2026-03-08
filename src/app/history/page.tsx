@@ -85,9 +85,13 @@ export default function HistoryPage() {
   return (
     <div className="min-h-screen px-5 py-10">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
-          ← Torna alla home
-        </Link>
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Link href="/admin" className="hover:text-slate-800">
+            Admin
+          </Link>
+          <span>/</span>
+          <span className="text-slate-400">Storico</span>
+        </div>
 
         <Card className="p-6">
           <h1 className="text-2xl font-semibold text-slate-900">
@@ -151,7 +155,7 @@ export default function HistoryPage() {
                       </p>
                     </div>
                     <Button asChild variant="outline" size="sm">
-                      <Link href={`/result?rid=${result.id}`}>
+                      <Link href={`/result?rid=${result.id}&from=admin`}>
                         Apri risultato
                       </Link>
                     </Button>

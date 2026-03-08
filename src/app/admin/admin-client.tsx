@@ -234,8 +234,11 @@ export default function AdminClient() {
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
-              ← Torna alla home
+        <Link
+          href="/admin"
+          className="text-sm text-slate-500 hover:text-slate-800"
+        >
+          ← Torna all&apos;admin
             </Link>
             <h1 className="mt-2 text-2xl font-semibold text-slate-900">
               Dashboard admin
@@ -451,7 +454,7 @@ export default function AdminClient() {
                       <div>
                         <div className="text-sm font-semibold text-slate-900">
                           <Link
-                            href={`/result?rid=${test.id}`}
+                            href={`/result?rid=${test.id}&from=admin`}
                             className="hover:underline"
                           >
                             {test.email}

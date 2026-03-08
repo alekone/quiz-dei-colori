@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Pause, Shuffle, StepBack } from "lucide-react";
+import { Shuffle, StepBack } from "lucide-react";
 import {
   getQuestionsForVariant,
   quizVariants,
@@ -68,7 +67,6 @@ export default function TestClient() {
   const [isSwipingOut, setIsSwipingOut] = useState(false);
   const [enterOffset, setEnterOffset] = useState(0);
   const [isEntering, setIsEntering] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
   const [showHint, setShowHint] = useState(true);
   const [flashDir, setFlashDir] = useState<"left" | "right" | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -92,11 +90,8 @@ export default function TestClient() {
   const answeredCount = Object.keys(answers).length;
   const progress = Math.round((answeredCount / questionSet.length) * 100);
 
-  const missingCount = questionSet.length - answeredCount;
   const isLast = currentIndex === questionSet.length - 1;
   const canSubmit = answeredCount === questionSet.length;
-  const remainingCount = questionSet.length - answeredCount;
-  const estimatedMinutes = Math.max(1, Math.ceil((remainingCount * 20) / 60));
   const showBreak =
     answeredCount > 0 &&
     answeredCount % 20 === 0 &&
@@ -219,7 +214,7 @@ export default function TestClient() {
       if (typeof navigator !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate(10);
       }
-    }, 260);
+    }, 450);
   }, [commitAnswer, isSwipingOut]);
 
   const summaryPreview = useMemo(() => {
@@ -310,20 +305,6 @@ export default function TestClient() {
     setLastBreakAt(null);
   };
 
-  const handlePause = () => {
-    const email = getUserEmail();
-    if (!email) return;
-    saveTestDraft({
-      email,
-      variant,
-      currentIndex,
-      answers,
-      startedAt,
-      updatedAt: new Date().toISOString(),
-    });
-    router.push("/");
-  };
-
   const handleRandom = () => {
     if (!hasStarted && draft) {
       clearTestDraft();
@@ -404,18 +385,27 @@ export default function TestClient() {
   const cardTransition =
     isDragging || isEntering ? "none" : "transform 180ms ease";
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    body.classList.remove("flash-yes", "flash-no");
+    if (flashDir === "right") {
+      body.classList.add("flash-yes");
+    } else if (flashDir === "left") {
+      body.classList.add("flash-no");
+    }
+    return () => {
+      body.classList.remove("flash-yes", "flash-no");
+    };
+  }, [flashDir]);
+
   return (
-    <div
-      className={`min-h-screen px-5 py-10 transition-colors duration-400 ${
-        flashDir === "right"
-          ? "bg-emerald-50"
-          : flashDir === "left"
-            ? "bg-rose-50"
-            : "bg-white"
-      }`}
-    >
+    <div className="min-h-screen px-5 py-10">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
+        <Link
+          href="/"
+          className="text-xs text-slate-400 hover:text-slate-600"
+        >
           ← Torna alla home
         </Link>
 
@@ -449,92 +439,59 @@ export default function TestClient() {
           </Card>
         )}
 
-        <Card className="relative p-6">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm text-slate-500">
-              <span>
-                Domanda {currentIndex + 1} di {questionSet.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowInfo((prev) => !prev)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-600 transition hover:border-slate-400"
-                aria-label="Mostra informazioni"
-              >
-                i
-              </button>
-            </div>
-            <Progress value={progress} />
-          </div>
-          {showInfo && (
-            <div className="absolute inset-x-6 top-16 z-10 rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-lg">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap gap-3">
-                  <span>Completamento: {progress}%</span>
-                  <span>Versione: {quizVariants[variant].label}</span>
-                  <span>Tempo stimato: ~{estimatedMinutes} min</span>
-                  <span>
-                    Risposte: {answeredCount}/{questionSet.length}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowInfo(false)}
-                  className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-500"
-                >
-                  Chiudi
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="fixed left-0 right-0 top-0 z-20 h-[5px] bg-slate-200">
+          <div
+            className="h-full bg-slate-500 transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
 
-          <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
-              <span
-                className={`rounded-full border px-3 py-1 transition ${
-                  swipeDir === "left"
-                    ? "border-rose-500 bg-rose-50 text-rose-700"
-                    : "border-slate-200 text-slate-400"
-                }`}
-              >
-                No
+        <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+          <span
+            className={`rounded-full border px-3 py-1 transition ${
+              swipeDir === "left"
+                ? "border-rose-500 bg-rose-50 text-rose-700"
+                : "border-slate-200 text-slate-400"
+            }`}
+          >
+            No
+          </span>
+          <span
+            className={`rounded-full border px-3 py-1 transition ${
+              swipeDir === "right"
+                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                : "border-slate-200 text-slate-400"
+            }`}
+          >
+            Sì
+          </span>
+        </div>
+
+        <div
+          ref={cardRef}
+          className={`swipe-card relative rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-md ${
+            isDragging || isSwipingOut ? "swipe-active" : ""
+          }`}
+          style={{ transform: cardTransform, transition: cardTransition }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          {showHint && currentIndex === 0 && (
+            <>
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-200">
+                ←
               </span>
-              <span
-                className={`rounded-full border px-3 py-1 transition ${
-                  swipeDir === "right"
-                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 text-slate-400"
-                }`}
-              >
-                Sì
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-200">
+                →
               </span>
-            </div>
-            <div
-              ref={cardRef}
-              className={`swipe-card relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${
-                isDragging || isSwipingOut ? "swipe-active" : ""
-              }`}
-              style={{ transform: cardTransform, transition: cardTransition }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            >
-              {showHint && currentIndex === 0 && (
-                <>
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-200">
-                    ←
-                  </span>
-                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-200">
-                    →
-                  </span>
-                </>
-              )}
-              <h1 className="text-xl font-semibold text-slate-900">
-                {currentQuestion.text}
-              </h1>
-            </div>
-          </div>
+            </>
+          )}
+          <h1 className="text-xl font-semibold text-slate-900">
+            {currentQuestion.text}
+          </h1>
+        </div>
 
           {showSaved && (
             <p className="mt-3 text-xs text-emerald-600">
@@ -542,8 +499,8 @@ export default function TestClient() {
             </p>
           )}
 
-          <div className="mt-6 flex flex-col gap-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Button
                 variant="outline"
                 className={
@@ -568,53 +525,35 @@ export default function TestClient() {
                 <span className="ml-2 text-xs text-slate-200">(S)</span>
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={handlePrevious}
-                disabled={currentIndex === 0}
-                aria-label="Indietro"
-              >
-                <StepBack className="h-4 w-4" />
-                <span className="ml-2 text-xs text-slate-500">Indietro</span>
-              </Button>
-              <Button variant="outline" onClick={handlePause} aria-label="Pausa">
-                <Pause className="h-4 w-4" />
-                <span className="ml-2 text-xs text-slate-500">Pausa</span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleRandom}
-                aria-label="Compila random"
-              >
-                <Shuffle className="h-4 w-4" />
-                <span className="ml-2 text-xs text-slate-500">Random</span>
-              </Button>
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handlePrevious}
+              disabled={currentIndex === 0}
+              aria-label="Indietro"
+              className="h-8 px-3 text-xs text-slate-500"
+            >
+              <StepBack className="mr-1 h-3.5 w-3.5" />
+              Indietro
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleRandom}
+              aria-label="Compila random"
+              className="h-8 px-3 text-xs text-slate-500"
+            >
+              <Shuffle className="mr-1 h-3.5 w-3.5" />
+              Random
+            </Button>
             </div>
           </div>
 
-          {missingCount > 0 && (
-            <p className="mt-4 text-xs text-slate-500">
-              Risposte mancanti: {missingCount}. Torna indietro per completare.
-            </p>
-          )}
-        </Card>
-
         {showBreak && (
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-700">
-              Pausa consigliata
-            </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Hai completato {answeredCount} risposte. Una breve pausa aiuta a
-              mantenere la concentrazione.
-            </p>
-            <div className="mt-4">
-              <Button size="sm" onClick={() => setLastBreakAt(answeredCount)}>
-                Continua
-              </Button>
-            </div>
-          </Card>
+          <div className="text-xs text-slate-400">
+            Hai completato {answeredCount} risposte.
+          </div>
         )}
 
         {summaryPreview && (
@@ -634,7 +573,7 @@ export default function TestClient() {
         )}
 
         {summaryPreview && (
-          <Card className="p-5">
+          <Card className="p-5 pb-10">
             <h2 className="text-sm font-semibold text-slate-700">
               Preview quadranti
             </h2>

@@ -36,6 +36,7 @@ export default function ResultClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resultId = searchParams.get("rid");
+  const fromAdmin = searchParams.get("from") === "admin";
   const [remoteResult, setRemoteResult] = useState<TestResult | null>(null);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [unlockRemainingMs, setUnlockRemainingMs] = useState<number | null>(null);
@@ -44,6 +45,12 @@ export default function ResultClient() {
     [resultId],
   );
   const result = storedResult ?? remoteResult;
+  const backHref = useMemo(() => {
+    if (fromAdmin || getAdminSession()) return "/admin";
+    return "/";
+  }, [fromAdmin]);
+  const isAdminView = fromAdmin || getAdminSession();
+  const backLabel = isAdminView ? "← Torna all'admin" : "← Torna alla home";
 
   useEffect(() => {
     if (!resultId) return;
@@ -530,9 +537,16 @@ export default function ResultClient() {
   return (
     <div className="min-h-screen px-5 py-10">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
-          ← Torna alla home
-        </Link>
+        <div className="flex items-center gap-3 text-sm text-slate-500">
+          <Link href={backHref} className="hover:text-slate-800">
+            {backLabel}
+          </Link>
+          {isAdminView && (
+            <Link href="/history" className="hover:text-slate-800">
+              Storico test
+            </Link>
+          )}
+        </div>
 
         <Card className="p-6">
           <div className="flex flex-col gap-2">
