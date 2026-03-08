@@ -18,17 +18,55 @@ create table if not exists public.test_results (
 
 alter table public.test_results enable row level security;
 
-create policy "public insert for tests"
-  on public.test_results
-  for insert
-  to anon
-  with check (true);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'test_results'
+      and policyname = 'public insert for tests'
+  ) then
+    create policy "public insert for tests"
+      on public.test_results
+      for insert
+      to anon
+      with check (true);
+  end if;
 
-create policy "public delete for tests"
-  on public.test_results
-  for delete
-  to anon
-  using (true);
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'test_results'
+      and policyname = 'public delete for tests'
+  ) then
+    create policy "public delete for tests"
+      on public.test_results
+      for delete
+      to anon
+      using (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if to_regclass('public.quiz_questions') is not null then
+    if not exists (
+      select 1
+      from pg_policies
+      where schemaname = 'public'
+        and tablename = 'quiz_questions'
+        and policyname = 'public read quiz questions'
+    ) then
+      create policy "public read quiz questions"
+        on public.quiz_questions
+        for select
+        to anon
+        using (true);
+    end if;
+  end if;
+end $$;
 
 create table if not exists public.admin_users (
   id uuid primary key default gen_random_uuid(),
@@ -61,10 +99,24 @@ create table if not exists public.cohort_invites (
   revoked_at timestamptz
 );
 
+create table if not exists public.quiz_questions (
+  id text primary key,
+  text text not null,
+  color text not null check (color in ('rosso', 'giallo', 'verde', 'blu')),
+  position integer not null,
+  is_short boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists quiz_questions_position_idx
+  on public.quiz_questions (position);
+
 alter table public.admin_users enable row level security;
 alter table public.admin_sessions enable row level security;
 alter table public.cohorts enable row level security;
 alter table public.cohort_invites enable row level security;
+alter table public.quiz_questions enable row level security;
 
 create extension if not exists pgcrypto;
 

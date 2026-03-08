@@ -1,3 +1,5 @@
+import { isSupabaseEnabled, supabaseClient } from "./supabaseClient";
+
 export type Color = "rosso" | "giallo" | "verde" | "blu";
 export type QuizVariant = "full" | "short";
 
@@ -12,6 +14,14 @@ export type Question = {
   text: string;
   color: Color;
   options: Option[];
+};
+
+type QuestionRow = {
+  id: string;
+  text: string;
+  color: Color;
+  position: number;
+  is_short: boolean;
 };
 
 export const colorMeta: Record<
@@ -703,6 +713,13 @@ const shortQuestionIds = new Set([
   "q32",
 ]);
 
+const questionCache: Partial<Record<QuizVariant, Question[]>> = {};
+
+const getFallbackQuestions = (variant: QuizVariant): Question[] =>
+  variant === "short"
+    ? questions.filter((question) => shortQuestionIds.has(question.id))
+    : questions;
+
 export const quizVariants: Record<
   QuizVariant,
   { label: string; description: string }
@@ -717,10 +734,47 @@ export const quizVariants: Record<
   },
 };
 
-export const getQuestionsForVariant = (variant: QuizVariant): Question[] =>
-  variant === "short"
-    ? questions.filter((question) => shortQuestionIds.has(question.id))
-    : questions;
+const mapRowToQuestion = (row: QuestionRow): Question => ({
+  id: row.id,
+  text: row.text,
+  color: row.color,
+  options: scaleOptions(row.id),
+});
+
+const loadQuestionsFromDb = async (): Promise<QuestionRow[] | null> => {
+  if (!isSupabaseEnabled || !supabaseClient) return null;
+  const { data, error } = await supabaseClient
+    .from("quiz_questions")
+    .select("id, text, color, position, is_short")
+    .order("position", { ascending: true });
+  if (error || !data) {
+    console.warn("Quiz questions fetch error", error?.message);
+    return null;
+  }
+  return data as QuestionRow[];
+};
+
+export const getQuestionsForVariant = async (
+  variant: QuizVariant,
+): Promise<Question[]> => {
+  const cached = questionCache[variant];
+  if (cached) return cached;
+
+  const rows = await loadQuestionsFromDb();
+  if (!rows?.length) {
+    const fallback = getFallbackQuestions(variant);
+    questionCache[variant] = fallback;
+    return fallback;
+  }
+
+  const filtered =
+    variant === "short"
+      ? rows.filter((row) => row.is_short)
+      : rows;
+  const mapped = filtered.map(mapRowToQuestion);
+  questionCache[variant] = mapped;
+  return mapped;
+};
 
 export type ScoreSummary = {
   scores: Record<Color, number>;

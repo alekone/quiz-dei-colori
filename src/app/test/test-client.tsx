@@ -10,6 +10,7 @@ import {
   getQuestionsForVariant,
   quizVariants,
   scoreAnswers,
+  type Question,
   type QuizVariant,
 } from "@/lib/quiz";
 import {
@@ -34,10 +35,9 @@ export default function TestClient() {
   const searchParams = useSearchParams();
   const variantParam = searchParams.get("variant");
   const variant: QuizVariant = variantParam === "short" ? "short" : "full";
-  const questionSet = useMemo(
-    () => getQuestionsForVariant(variant),
-    [variant],
-  );
+  const [questionSet, setQuestionSet] = useState<Question[]>([]);
+  const [loadedVariant, setLoadedVariant] = useState<QuizVariant | null>(null);
+  const isLoadingQuestions = loadedVariant !== variant;
   const computeInitialDraft = () => {
     const email = getUserEmail();
     const rawDraft = getTestDraft();
@@ -77,7 +77,21 @@ export default function TestClient() {
   const lastMoveTime = useRef(0);
   const savedTimerRef = useRef<number | null>(null);
   const currentQuestion = questionSet[currentIndex];
-  const selectedWeight = answers[currentQuestion.id];
+  const currentQuestionId = currentQuestion?.id;
+  const selectedWeight = currentQuestionId ? answers[currentQuestionId] : undefined;
+
+  useEffect(() => {
+    let isMounted = true;
+    void getQuestionsForVariant(variant)
+      .then((data) => {
+        if (!isMounted) return;
+        setQuestionSet(data);
+        setLoadedVariant(variant);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [variant]);
 
   useEffect(() => {
     const email = getUserEmail();
@@ -88,11 +102,14 @@ export default function TestClient() {
 
 
   const answeredCount = Object.keys(answers).length;
-  const progress = Math.round((answeredCount / questionSet.length) * 100);
+  const progress = questionSet.length
+    ? Math.round((answeredCount / questionSet.length) * 100)
+    : 0;
 
   const isLast = currentIndex === questionSet.length - 1;
   const canSubmit = answeredCount === questionSet.length;
   const showBreak =
+    questionSet.length > 0 &&
     answeredCount > 0 &&
     answeredCount % 20 === 0 &&
     answeredCount !== lastBreakAt &&
@@ -159,6 +176,7 @@ export default function TestClient() {
     weight: number,
     options: { autoAdvance?: boolean } = {},
   ) => {
+    if (!currentQuestionId) return;
     if (!hasStarted && draft) {
       clearTestDraft();
       setDraft(null);
@@ -166,7 +184,7 @@ export default function TestClient() {
     }
     const nextAnswers = {
       ...answers,
-      [currentQuestion.id]: weight,
+      [currentQuestionId]: weight,
     };
     setAnswers(nextAnswers);
     setHasStarted(true);
@@ -189,7 +207,7 @@ export default function TestClient() {
     }
   }, [
     answers,
-    currentQuestion.id,
+    currentQuestionId,
     draft,
     finishWithAnswers,
     hasStarted,
@@ -218,7 +236,7 @@ export default function TestClient() {
   }, [commitAnswer, isSwipingOut]);
 
   const summaryPreview = useMemo(() => {
-    if (!answeredCount) return null;
+    if (!answeredCount || questionSet.length === 0) return null;
     return scoreAnswers(answers, questionSet);
   }, [answeredCount, answers, questionSet]);
 
@@ -228,7 +246,7 @@ export default function TestClient() {
   }, [answers, canSubmit, finishWithAnswers]);
 
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!hasStarted || questionSet.length === 0) return;
     const email = getUserEmail();
     if (!email) return;
     saveTestDraft({
@@ -239,7 +257,7 @@ export default function TestClient() {
       startedAt,
       updatedAt: new Date().toISOString(),
     });
-  }, [answers, currentIndex, hasStarted, startedAt, variant]);
+  }, [answers, currentIndex, hasStarted, questionSet.length, startedAt, variant]);
 
   useEffect(() => {
     return () => {
@@ -278,7 +296,7 @@ export default function TestClient() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     canSubmit,
-    currentQuestion.id,
+    currentQuestionId,
     handleFinish,
     handleNext,
     isLast,
@@ -306,6 +324,7 @@ export default function TestClient() {
   };
 
   const handleRandom = () => {
+    if (questionSet.length === 0) return;
     if (!hasStarted && draft) {
       clearTestDraft();
       setDraft(null);
@@ -398,6 +417,40 @@ export default function TestClient() {
       body.classList.remove("flash-yes", "flash-no");
     };
   }, [flashDir]);
+
+  if (isLoadingQuestions) {
+    return (
+      <div className="min-h-screen px-5 py-10">
+        <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-700">
+              Caricamento domande...
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Stiamo preparando il test.
+            </p>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen px-5 py-10">
+        <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-700">
+              Nessuna domanda disponibile
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Contatta l&apos;amministratore o riprova più tardi.
+            </p>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen px-5 py-10">

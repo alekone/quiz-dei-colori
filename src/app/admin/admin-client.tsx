@@ -251,6 +251,9 @@ export default function AdminClient() {
             <Button asChild variant="outline">
               <Link href="/history">Storico completo</Link>
             </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin/questions">Domande quiz</Link>
+            </Button>
             <Button variant="outline" onClick={loadAll} disabled={loading}>
               Aggiorna dati
             </Button>

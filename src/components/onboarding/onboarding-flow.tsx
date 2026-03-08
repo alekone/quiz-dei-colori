@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import LoginForm from "@/components/login-form";
-import { getQuestionsForVariant, type QuizVariant } from "@/lib/quiz";
+import { getQuestionsForVariant, type Question, type QuizVariant } from "@/lib/quiz";
 
 const totalSteps = 4;
 
@@ -33,15 +33,32 @@ export default function OnboardingFlow() {
   const dragStartTime = useRef(0);
 
   const seedId = useId();
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loadedVariant, setLoadedVariant] = useState<QuizVariant | null>(null);
+  const isLoadingQuestions = loadedVariant !== variant;
+
+  useEffect(() => {
+    let isMounted = true;
+    void getQuestionsForVariant(variant)
+      .then((data) => {
+        if (!isMounted) return;
+        setQuestions(data);
+        setLoadedVariant(variant);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [variant]);
+
   const teaserQuestion = useMemo(() => {
-    const questions = getQuestionsForVariant(variant);
+    if (!questions.length) return null;
     let hash = 0;
     for (let i = 0; i < seedId.length; i += 1) {
       hash = (hash * 31 + seedId.charCodeAt(i)) % 100000;
     }
     const index = Math.abs(hash) % questions.length;
     return questions[index];
-  }, [seedId, variant]);
+  }, [questions, seedId]);
 
   const detourTitles = useMemo(
     () => [
@@ -253,6 +270,23 @@ export default function OnboardingFlow() {
     };
   }, [flashDir]);
 
+  if (isLoadingQuestions) {
+    return (
+      <div className="min-h-screen w-full">
+        <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-6">
+          <Card className="p-6">
+            <h2 className="text-2xl font-semibold text-slate-900">
+              Caricamento domande...
+            </h2>
+            <p className="mt-3 text-sm text-slate-600">
+              Stiamo preparando il test.
+            </p>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen w-full">
       <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-6">
@@ -309,7 +343,7 @@ export default function OnboardingFlow() {
           </div>
         </Card>
         )}
-        {detourStep === null && stepIndex === 0 && (
+        {detourStep === null && stepIndex === 0 && teaserQuestion && (
         <Card
           ref={cardRef}
           className="relative p-6 swipe-card"
@@ -357,6 +391,16 @@ export default function OnboardingFlow() {
               Sì
             </Button>
           </div>
+        </Card>
+        )}
+        {detourStep === null && stepIndex === 0 && !teaserQuestion && (
+        <Card className="relative p-6 swipe-card">
+          <h1 className="mt-4 text-2xl font-semibold text-slate-900">
+            Nessuna domanda disponibile
+          </h1>
+          <p className="mt-3 text-sm text-slate-600">
+            Riprova più tardi o contatta l&apos;amministratore.
+          </p>
         </Card>
         )}
 
