@@ -1,4 +1,3 @@
-import { hash } from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
 import { corsHeaders, getBody, json, requireAdmin, supabase } from "../_shared/admin.ts";
 
 type Payload = {
@@ -31,16 +30,27 @@ Deno.serve(async (req) => {
   if (typeof isActive === "boolean") {
     updates.is_active = isActive;
   }
-  if (typeof password === "string" && password.trim()) {
-    updates.password_hash = await hash(password);
+  const nextPassword =
+    typeof password === "string" && password.trim() ? password.trim() : null;
+
+  if (Object.keys(updates).length > 0) {
+    const { error } = await supabase.from("admin_users").update(updates).eq("id", id);
+    if (error) return json({ error: error.message }, 500);
   }
 
-  const { data, error } = await supabase
+  if (nextPassword) {
+    const { error } = await supabase.rpc("admin_set_password", {
+      p_user_id: id,
+      p_password: nextPassword,
+    });
+    if (error) return json({ error: error.message }, 500);
+  }
+
+  const { data } = await supabase
     .from("admin_users")
-    .update(updates)
-    .eq("id", id)
     .select("id, username, is_active, created_at")
+    .eq("id", id)
     .maybeSingle();
-  if (error) return json({ error: error.message }, 500);
+
   return json({ admin: data });
 });

@@ -1,4 +1,3 @@
-/* eslint-disable no-nested-ternary */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -173,8 +172,11 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen px-5 py-10">
       <main className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
-          ← Torna alla home
+        <Link
+          href="/admin"
+          className="text-sm text-slate-500 hover:text-slate-800"
+        >
+          ← Torna all&apos;admin
         </Link>
 
         <Card className="p-6">

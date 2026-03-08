@@ -21,6 +21,7 @@ type AdminTestRow = {
   invite_code: string | null;
   unlock_at: string | null;
   question_count: number;
+  answers?: Record<string, number> | string;
 };
 
 type CohortRow = {
@@ -54,6 +55,7 @@ export default function AdminClient() {
   const [isMounted, setIsMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
   const [tests, setTests] = useState<AdminTestRow[]>([]);
   const [cohorts, setCohorts] = useState<CohortRow[]>([]);
@@ -174,6 +176,23 @@ export default function AdminClient() {
     await loadAll();
   };
 
+  const handleCopyInvite = async (code: string) => {
+    const base =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://test.mininno.com";
+    const referralPath = process.env.NEXT_PUBLIC_REFERRAL_PATH ?? "/quiz-colori";
+    const normalizedPath = `/${referralPath}`.replace(/\/{2,}/g, "/");
+    const url = `${base}${normalizedPath}?ref=${encodeURIComponent(code)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setInviteStatus("Link invito copiato.");
+    } catch {
+      setInviteStatus("Copia non riuscita.");
+    }
+    window.setTimeout(() => setInviteStatus(null), 2000);
+  };
+
   const handleDeleteTest = async (id: string) => {
     await callAdminFunction("admin-delete-test", { id });
     await loadAll();
@@ -215,8 +234,11 @@ export default function AdminClient() {
       <main className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
-              ← Torna alla home
+        <Link
+          href="/admin"
+          className="text-sm text-slate-500 hover:text-slate-800"
+        >
+          ← Torna all&apos;admin
             </Link>
             <h1 className="mt-2 text-2xl font-semibold text-slate-900">
               Dashboard admin
@@ -226,6 +248,12 @@ export default function AdminClient() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/history">Storico completo</Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/admin/questions">Domande quiz</Link>
+            </Button>
             <Button variant="outline" onClick={loadAll} disabled={loading}>
               Aggiorna dati
             </Button>
@@ -245,6 +273,11 @@ export default function AdminClient() {
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-700">Coorti</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_150px_auto]">
+              <div className="sm:col-span-3 grid gap-1">
+                <span className="text-xs text-slate-500">
+                  Crea una coorte con un timebox per i risultati.
+                </span>
+              </div>
               <Input
                 placeholder="Nome coorte"
                 value={cohortName}
@@ -288,6 +321,9 @@ export default function AdminClient() {
                     </div>
                   </div>
                   <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_120px]">
+                    <span className="text-[11px] text-slate-500 sm:col-span-2">
+                      Modifica nome e delay (minuti) della coorte selezionata.
+                    </span>
                     <Input
                       value={editCohorts[cohort.id] ?? cohort.name}
                       onChange={(event) =>
@@ -323,6 +359,11 @@ export default function AdminClient() {
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-700">Inviti</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <div className="sm:col-span-2 grid gap-1">
+                <span className="text-xs text-slate-500">
+                  Seleziona una coorte e genera un link referral dedicato.
+                </span>
+              </div>
               <select
                 className="h-10 rounded-md border border-slate-200 px-3 text-sm"
                 value={inviteCohort}
@@ -337,6 +378,9 @@ export default function AdminClient() {
               </select>
               <Button onClick={handleCreateInvite}>Genera invito</Button>
             </div>
+            {inviteStatus && (
+              <p className="mt-2 text-xs text-slate-500">{inviteStatus}</p>
+            )}
             <div className="mt-4 space-y-3">
               {invites.map((invite) => (
                 <div
@@ -358,6 +402,13 @@ export default function AdminClient() {
                     ) : (
                       <Badge variant="secondary">Attivo</Badge>
                     )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCopyInvite(invite.code)}
+                    >
+                      Copia link
+                    </Button>
                     {!invite.revoked_at && (
                       <Button
                         size="sm"
@@ -380,11 +431,23 @@ export default function AdminClient() {
         <section className="grid gap-4 lg:grid-cols-2">
           <Card className="p-5">
             <h2 className="text-sm font-semibold text-slate-700">Test recenti</h2>
+            <p className="mt-2 text-xs text-slate-500">
+              “Elimina” rimuove il singolo test. “Elimina per email” rimuove
+              tutti i test associati a quella email.
+            </p>
             <div className="mt-4 space-y-3">
               {tests.map((test) => {
                 const duration = test.duration_ms
                   ? Math.max(1, Math.round(test.duration_ms / 60000))
                   : null;
+                const answerCount =
+                  typeof test.answers === "string"
+                    ? Object.keys(JSON.parse(test.answers)).length
+                    : test.answers
+                      ? Object.keys(test.answers).length
+                      : 0;
+                const isCompleted =
+                  test.question_count > 0 && answerCount >= test.question_count;
                 return (
                   <div
                     key={test.id}
@@ -393,12 +456,22 @@ export default function AdminClient() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <div className="text-sm font-semibold text-slate-900">
-                          {test.email}
+                          <Link
+                            href={`/result?rid=${test.id}&from=admin`}
+                            className="hover:underline"
+                          >
+                            {test.email}
+                          </Link>
                         </div>
                         <div className="text-xs text-slate-500">
                           {new Date(test.created_at).toLocaleString("it-IT")}
                           {test.cohort ? ` · ${test.cohort}` : ""}
                           {duration ? ` · ${duration} min` : ""}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {isCompleted
+                            ? "Completato"
+                            : `In sospeso: ${answerCount}/${test.question_count}`}
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -457,6 +530,11 @@ export default function AdminClient() {
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-700">Admin users</h2>
           <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <div className="sm:col-span-3 grid gap-1">
+              <span className="text-xs text-slate-500">
+                Crea nuovi admin o aggiorna password/attivazione.
+              </span>
+            </div>
             <Input
               placeholder="Nuovo username"
               value={adminUsername}

@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Pause, Shuffle, StepBack } from "lucide-react";
+import { Shuffle, StepBack } from "lucide-react";
 import {
   getQuestionsForVariant,
   quizVariants,
   scoreAnswers,
+  type Question,
   type QuizVariant,
 } from "@/lib/quiz";
 import {
@@ -35,44 +35,10 @@ export default function TestClient() {
   const searchParams = useSearchParams();
   const variantParam = searchParams.get("variant");
   const variant: QuizVariant = variantParam === "short" ? "short" : "full";
-  const questionSet = useMemo(
-    () => getQuestionsForVariant(variant),
-    [variant],
-  );
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
-  const [draft, setDraft] = useState<TestDraft | null>(null);
-  const [hasStarted, setHasStarted] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [lastBreakAt, setLastBreakAt] = useState<number | null>(null);
-  const [dragX, setDragX] = useState(0);
-  const [dragY, setDragY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [swipeDir, setSwipeDir] = useState<"left" | "right" | "none">("none");
-  const [isSwipingOut, setIsSwipingOut] = useState(false);
-  const [enterOffset, setEnterOffset] = useState(0);
-  const [isEntering, setIsEntering] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
-  const [showHint, setShowHint] = useState(true);
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const dragStartX = useRef(0);
-  const dragStartY = useRef(0);
-  const dragStartTime = useRef(0);
-  const lastMoveX = useRef(0);
-  const lastMoveTime = useRef(0);
-  const lastSwipeDir = useRef<"left" | "right" | "none">("none");
-  const currentQuestion = questionSet[currentIndex];
-  const selectedWeight = answers[currentQuestion.id];
-
-  useEffect(() => {
-    const email = getUserEmail();
-    if (!email) {
-      router.replace("/login");
-    }
-  }, [router]);
-
-  useEffect(() => {
+  const [questionSet, setQuestionSet] = useState<Question[]>([]);
+  const [loadedVariant, setLoadedVariant] = useState<QuizVariant | null>(null);
+  const isLoadingQuestions = loadedVariant !== variant;
+  const computeInitialDraft = () => {
     const email = getUserEmail();
     const rawDraft = getTestDraft();
     if (email && rawDraft && rawDraft.email !== email) {
@@ -84,43 +50,91 @@ export default function TestClient() {
       existing.variant === variant &&
       Object.keys(existing.answers).length > 0
     ) {
-      setDraft(existing);
-    } else {
-      setDraft(null);
+      return existing;
     }
-    setAnswers({});
-    setCurrentIndex(0);
-    setHasStarted(false);
-    setStartedAt(new Date().toISOString());
-    setLastBreakAt(null);
+    return null;
+  };
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
+  const [draft, setDraft] = useState<TestDraft | null>(() => computeInitialDraft());
+  const [hasStarted, setHasStarted] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+  const [lastBreakAt, setLastBreakAt] = useState<number | null>(null);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [swipeDir, setSwipeDir] = useState<"left" | "right" | "none">("none");
+  const [isSwipingOut, setIsSwipingOut] = useState(false);
+  const [enterOffset, setEnterOffset] = useState(0);
+  const [isEntering, setIsEntering] = useState(false);
+  const [showHint, setShowHint] = useState(true);
+  const [flashDir, setFlashDir] = useState<"left" | "right" | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const dragStartX = useRef(0);
+  const dragStartY = useRef(0);
+  const dragStartTime = useRef(0);
+  const lastMoveX = useRef(0);
+  const lastMoveTime = useRef(0);
+  const savedTimerRef = useRef<number | null>(null);
+  const currentQuestion = questionSet[currentIndex];
+  const currentQuestionId = currentQuestion?.id;
+  const selectedWeight = currentQuestionId ? answers[currentQuestionId] : undefined;
+
+  useEffect(() => {
+    let isMounted = true;
+    void getQuestionsForVariant(variant)
+      .then((data) => {
+        if (!isMounted) return;
+        setQuestionSet(data);
+        setLoadedVariant(variant);
+      });
+    return () => {
+      isMounted = false;
+    };
   }, [variant]);
 
-  const answeredCount = Object.keys(answers).length;
-  const progress = Math.round((answeredCount / questionSet.length) * 100);
+  useEffect(() => {
+    const email = getUserEmail();
+    if (!email) {
+      router.replace("/login");
+    }
+  }, [router]);
 
-  const missingCount = questionSet.length - answeredCount;
+
+  const answeredCount = Object.keys(answers).length;
+  const progress = questionSet.length
+    ? Math.round((answeredCount / questionSet.length) * 100)
+    : 0;
+
   const isLast = currentIndex === questionSet.length - 1;
   const canSubmit = answeredCount === questionSet.length;
-  const remainingCount = questionSet.length - answeredCount;
-  const estimatedMinutes = Math.max(1, Math.ceil((remainingCount * 20) / 60));
-  const showSaved =
-    savedAt !== null && Date.now() - savedAt < 1500;
   const showBreak =
+    questionSet.length > 0 &&
     answeredCount > 0 &&
     answeredCount % 20 === 0 &&
     answeredCount !== lastBreakAt &&
     !isLast;
 
-  const handleNext = () => {
+  const startEnter = useCallback((direction: "left" | "right") => {
+    setIsEntering(true);
+    setEnterOffset(direction === "left" ? 60 : -60);
+    window.requestAnimationFrame(() => {
+      setIsEntering(false);
+      setEnterOffset(0);
+    });
+  }, []);
+
+  const handleNext = useCallback(() => {
     if (isLast) return;
+    startEnter("right");
     setCurrentIndex((prev) => Math.min(prev + 1, questionSet.length - 1));
-  };
+  }, [isLast, questionSet.length, startEnter]);
 
   const handlePrevious = () => {
     setCurrentIndex((prev) => Math.max(prev - 1, 0));
   };
 
-  const finishWithAnswers = (nextAnswers: Record<string, number>) => {
+  const finishWithAnswers = useCallback((nextAnswers: Record<string, number>) => {
     const email = getUserEmail() ?? "utente@demo.test";
     const summary = scoreAnswers(nextAnswers, questionSet);
     const durationMs = Math.max(
@@ -156,12 +170,13 @@ export default function TestClient() {
     clearTestDraft();
     clearReferrerId();
     router.push(`/result?rid=${result.id}`);
-  };
+  }, [questionSet, router, startedAt, variant]);
 
-  const commitAnswer = (
+  const commitAnswer = useCallback((
     weight: number,
     options: { autoAdvance?: boolean } = {},
   ) => {
+    if (!currentQuestionId) return;
     if (!hasStarted && draft) {
       clearTestDraft();
       setDraft(null);
@@ -169,15 +184,19 @@ export default function TestClient() {
     }
     const nextAnswers = {
       ...answers,
-      [currentQuestion.id]: weight,
+      [currentQuestionId]: weight,
     };
     setAnswers(nextAnswers);
     setHasStarted(true);
-    setSavedAt(Date.now());
     setShowHint(false);
+    if (savedTimerRef.current) {
+      window.clearTimeout(savedTimerRef.current);
+    }
+    setShowSaved(true);
+    savedTimerRef.current = window.setTimeout(() => setShowSaved(false), 1500);
 
     if (options.autoAdvance) {
-      lastSwipeDir.current = weight === 1 ? "right" : "left";
+      startEnter(weight === 1 ? "right" : "left");
       if (isLast) {
         if (Object.keys(nextAnswers).length === questionSet.length) {
           finishWithAnswers(nextAnswers);
@@ -186,20 +205,48 @@ export default function TestClient() {
         setCurrentIndex((prev) => Math.min(prev + 1, questionSet.length - 1));
       }
     }
-  };
+  }, [
+    answers,
+    currentQuestionId,
+    draft,
+    finishWithAnswers,
+    hasStarted,
+    isLast,
+    questionSet.length,
+    startEnter,
+  ]);
+
+  const triggerSwipe = useCallback((dir: "left" | "right") => {
+    if (isSwipingOut) return;
+    const width = cardRef.current?.offsetWidth ?? 320;
+    setSwipeDir(dir);
+    setFlashDir(dir);
+    setIsSwipingOut(true);
+    setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
+    window.setTimeout(() => {
+      setIsSwipingOut(false);
+      setDragX(0);
+      setSwipeDir("none");
+      setFlashDir(null);
+      commitAnswer(dir === "right" ? 1 : 0, { autoAdvance: true });
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(10);
+      }
+    }, 450);
+  }, [commitAnswer, isSwipingOut]);
 
   const summaryPreview = useMemo(() => {
-    if (!answeredCount) return null;
+    if (!answeredCount || questionSet.length === 0) return null;
     return scoreAnswers(answers, questionSet);
   }, [answeredCount, answers, questionSet]);
 
-  const handleFinish = () => {
+  const handleFinish = useCallback(() => {
     if (!canSubmit) return;
     finishWithAnswers(answers);
-  };
+  }, [answers, canSubmit, finishWithAnswers]);
 
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!hasStarted || questionSet.length === 0) return;
     const email = getUserEmail();
     if (!email) return;
     saveTestDraft({
@@ -210,21 +257,15 @@ export default function TestClient() {
       startedAt,
       updatedAt: new Date().toISOString(),
     });
-  }, [answers, currentIndex, hasStarted, startedAt, variant]);
+  }, [answers, currentIndex, hasStarted, questionSet.length, startedAt, variant]);
 
   useEffect(() => {
-    if (lastSwipeDir.current === "none") return;
-    const direction = lastSwipeDir.current;
-    const offset = direction === "left" ? 60 : -60;
-    setIsEntering(true);
-    setEnterOffset(offset);
-    const frame = window.requestAnimationFrame(() => {
-      setIsEntering(false);
-      setEnterOffset(0);
-    });
-    lastSwipeDir.current = "none";
-    return () => window.cancelAnimationFrame(frame);
-  }, [currentQuestion.id]);
+    return () => {
+      if (savedTimerRef.current) {
+        window.clearTimeout(savedTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -255,11 +296,12 @@ export default function TestClient() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     canSubmit,
-    currentQuestion.id,
+    currentQuestionId,
     handleFinish,
     handleNext,
     isLast,
     selectedWeight,
+    triggerSwipe,
   ]);
 
   const handleResume = () => {
@@ -268,7 +310,7 @@ export default function TestClient() {
     setCurrentIndex(Math.min(draft.currentIndex, questionSet.length - 1));
     setStartedAt(draft.startedAt);
     setHasStarted(true);
-    setSavedAt(null);
+    setShowSaved(false);
   };
 
   const handleRestart = () => {
@@ -281,21 +323,8 @@ export default function TestClient() {
     setLastBreakAt(null);
   };
 
-  const handlePause = () => {
-    const email = getUserEmail();
-    if (!email) return;
-    saveTestDraft({
-      email,
-      variant,
-      currentIndex,
-      answers,
-      startedAt,
-      updatedAt: new Date().toISOString(),
-    });
-    router.push("/");
-  };
-
   const handleRandom = () => {
+    if (questionSet.length === 0) return;
     if (!hasStarted && draft) {
       clearTestDraft();
       setDraft(null);
@@ -330,7 +359,6 @@ export default function TestClient() {
     lastMoveTime.current = dragStartTime.current;
     setIsDragging(true);
     setDragX(0);
-    setDragY(0);
     setSwipeDir("none");
     setShowHint(false);
   };
@@ -342,34 +370,13 @@ export default function TestClient() {
     const isMostlyHorizontal = Math.abs(deltaX) > Math.abs(deltaY) * 0.8;
     if (!isMostlyHorizontal) {
       setDragX(0);
-      setDragY(0);
       updateSwipeDir(0);
       return;
     }
     setDragX(deltaX);
-    setDragY(deltaY);
     updateSwipeDir(deltaX);
     lastMoveX.current = event.clientX;
     lastMoveTime.current = performance.now();
-  };
-
-  const triggerSwipe = (dir: "left" | "right") => {
-    if (isSwipingOut) return;
-    const width = cardRef.current?.offsetWidth ?? 320;
-    setSwipeDir(dir);
-    setIsSwipingOut(true);
-    setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
-    setDragY(0);
-    window.setTimeout(() => {
-      setIsSwipingOut(false);
-      setDragX(0);
-      setDragY(0);
-      setSwipeDir("none");
-      commitAnswer(dir === "right" ? 1 : 0, { autoAdvance: true });
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        navigator.vibrate(10);
-      }
-    }, 160);
   };
 
   const handlePointerUp = () => {
@@ -388,7 +395,6 @@ export default function TestClient() {
       triggerSwipe(dir);
     } else {
       setDragX(0);
-      setDragY(0);
       setSwipeDir("none");
     }
   };
@@ -398,10 +404,61 @@ export default function TestClient() {
   const cardTransition =
     isDragging || isEntering ? "none" : "transform 180ms ease";
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    body.classList.remove("flash-yes", "flash-no");
+    if (flashDir === "right") {
+      body.classList.add("flash-yes");
+    } else if (flashDir === "left") {
+      body.classList.add("flash-no");
+    }
+    return () => {
+      body.classList.remove("flash-yes", "flash-no");
+    };
+  }, [flashDir]);
+
+  if (isLoadingQuestions) {
+    return (
+      <div className="min-h-screen px-5 py-10">
+        <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-700">
+              Caricamento domande...
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Stiamo preparando il test.
+            </p>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen px-5 py-10">
+        <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+          <Card className="p-5">
+            <h2 className="text-sm font-semibold text-slate-700">
+              Nessuna domanda disponibile
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Contatta l&apos;amministratore o riprova più tardi.
+            </p>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen px-5 py-10">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
+        <Link
+          href="/"
+          className="text-xs text-slate-400 hover:text-slate-600"
+        >
           ← Torna alla home
         </Link>
 
@@ -435,92 +492,59 @@ export default function TestClient() {
           </Card>
         )}
 
-        <Card className="relative p-6">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm text-slate-500">
-              <span>
-                Domanda {currentIndex + 1} di {questionSet.length}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowInfo((prev) => !prev)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-xs font-semibold text-slate-600 transition hover:border-slate-400"
-                aria-label="Mostra informazioni"
-              >
-                i
-              </button>
-            </div>
-            <Progress value={progress} />
-          </div>
-          {showInfo && (
-            <div className="absolute inset-x-6 top-16 z-10 rounded-lg border border-slate-200 bg-white p-4 text-xs text-slate-600 shadow-lg">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex flex-wrap gap-3">
-                  <span>Completamento: {progress}%</span>
-                  <span>Versione: {quizVariants[variant].label}</span>
-                  <span>Tempo stimato: ~{estimatedMinutes} min</span>
-                  <span>
-                    Risposte: {answeredCount}/{questionSet.length}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowInfo(false)}
-                  className="rounded-full border border-slate-200 px-2 py-0.5 text-xs text-slate-500"
-                >
-                  Chiudi
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="fixed left-0 right-0 top-0 z-20 h-[5px] bg-slate-200">
+          <div
+            className="h-full bg-slate-500 transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
 
-          <div className="mt-6 space-y-3">
-            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
-              <span
-                className={`rounded-full border px-3 py-1 transition ${
-                  swipeDir === "left"
-                    ? "border-rose-500 bg-rose-50 text-rose-700"
-                    : "border-slate-200 text-slate-400"
-                }`}
-              >
-                No
+        <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+          <span
+            className={`rounded-full border px-3 py-1 transition ${
+              swipeDir === "left"
+                ? "border-rose-500 bg-rose-50 text-rose-700"
+                : "border-slate-200 text-slate-400"
+            }`}
+          >
+            No
+          </span>
+          <span
+            className={`rounded-full border px-3 py-1 transition ${
+              swipeDir === "right"
+                ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                : "border-slate-200 text-slate-400"
+            }`}
+          >
+            Sì
+          </span>
+        </div>
+
+        <div
+          ref={cardRef}
+          className={`swipe-card relative rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-md ${
+            isDragging || isSwipingOut ? "swipe-active" : ""
+          }`}
+          style={{ transform: cardTransform, transition: cardTransition }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          {showHint && currentIndex === 0 && (
+            <>
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-200">
+                ←
               </span>
-              <span
-                className={`rounded-full border px-3 py-1 transition ${
-                  swipeDir === "right"
-                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-                    : "border-slate-200 text-slate-400"
-                }`}
-              >
-                Sì
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-200">
+                →
               </span>
-            </div>
-            <div
-              ref={cardRef}
-              className={`swipe-card relative rounded-2xl border border-slate-200 bg-white p-6 shadow-sm ${
-                isDragging || isSwipingOut ? "swipe-active" : ""
-              }`}
-              style={{ transform: cardTransform, transition: cardTransition }}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-            >
-              {showHint && currentIndex === 0 && (
-                <>
-                  <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-200">
-                    ←
-                  </span>
-                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-200">
-                    →
-                  </span>
-                </>
-              )}
-              <h1 className="text-xl font-semibold text-slate-900">
-                {currentQuestion.text}
-              </h1>
-            </div>
-          </div>
+            </>
+          )}
+          <h1 className="text-xl font-semibold text-slate-900">
+            {currentQuestion.text}
+          </h1>
+        </div>
 
           {showSaved && (
             <p className="mt-3 text-xs text-emerald-600">
@@ -528,8 +552,8 @@ export default function TestClient() {
             </p>
           )}
 
-          <div className="mt-6 flex flex-col gap-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <Button
                 variant="outline"
                 className={
@@ -554,53 +578,35 @@ export default function TestClient() {
                 <span className="ml-2 text-xs text-slate-200">(S)</span>
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={handlePrevious}
-                disabled={currentIndex === 0}
-                aria-label="Indietro"
-              >
-                <StepBack className="h-4 w-4" />
-                <span className="ml-2 text-xs text-slate-500">Indietro</span>
-              </Button>
-              <Button variant="outline" onClick={handlePause} aria-label="Pausa">
-                <Pause className="h-4 w-4" />
-                <span className="ml-2 text-xs text-slate-500">Pausa</span>
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleRandom}
-                aria-label="Compila random"
-              >
-                <Shuffle className="h-4 w-4" />
-                <span className="ml-2 text-xs text-slate-500">Random</span>
-              </Button>
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handlePrevious}
+              disabled={currentIndex === 0}
+              aria-label="Indietro"
+              className="h-8 px-3 text-xs text-slate-500"
+            >
+              <StepBack className="mr-1 h-3.5 w-3.5" />
+              Indietro
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleRandom}
+              aria-label="Compila random"
+              className="h-8 px-3 text-xs text-slate-500"
+            >
+              <Shuffle className="mr-1 h-3.5 w-3.5" />
+              Random
+            </Button>
             </div>
           </div>
 
-          {missingCount > 0 && (
-            <p className="mt-4 text-xs text-slate-500">
-              Risposte mancanti: {missingCount}. Torna indietro per completare.
-            </p>
-          )}
-        </Card>
-
         {showBreak && (
-          <Card className="p-5">
-            <h2 className="text-sm font-semibold text-slate-700">
-              Pausa consigliata
-            </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Hai completato {answeredCount} risposte. Una breve pausa aiuta a
-              mantenere la concentrazione.
-            </p>
-            <div className="mt-4">
-              <Button size="sm" onClick={() => setLastBreakAt(answeredCount)}>
-                Continua
-              </Button>
-            </div>
-          </Card>
+          <div className="text-xs text-slate-400">
+            Hai completato {answeredCount} risposte.
+          </div>
         )}
 
         {summaryPreview && (
@@ -620,7 +626,7 @@ export default function TestClient() {
         )}
 
         {summaryPreview && (
-          <Card className="p-5">
+          <Card className="p-5 pb-10">
             <h2 className="text-sm font-semibold text-slate-700">
               Preview quadranti
             </h2>

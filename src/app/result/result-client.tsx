@@ -9,36 +9,105 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { QuadrantChart } from "@/components/quadrant-chart";
-import { colorMeta, quizVariants, type Color } from "@/lib/quiz";
-import { getTestResultById, type TestResult } from "@/lib/storage";
+import { colorMeta, quizVariants, type Color, type ScoreSummary } from "@/lib/quiz";
+import { callAdminFunction } from "@/lib/adminApi";
+import { getAdminSession } from "@/lib/adminSession";
+import { getTestResultById, normalizeSummary, type TestResult } from "@/lib/storage";
+
+type AdminTestRow = {
+  id: string;
+  email: string;
+  created_at: string;
+  started_at: string | null;
+  duration_ms: number | null;
+  variant: string | null;
+  cohort: string | null;
+  cohort_id: string | null;
+  referrer_id: string | null;
+  invite_code: string | null;
+  unlock_at: string | null;
+  unlocked_at: string | null;
+  answers: Record<string, number> | string;
+  summary: Partial<ScoreSummary> | string;
+  question_count: number;
+};
 
 export default function ResultClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resultId = searchParams.get("rid");
-  const [result, setResult] = useState<TestResult | null>(null);
+  const fromAdmin = searchParams.get("from") === "admin";
+  const [remoteResult, setRemoteResult] = useState<TestResult | null>(null);
   const [shareStatus, setShareStatus] = useState<string | null>(null);
   const [unlockRemainingMs, setUnlockRemainingMs] = useState<number | null>(null);
+  const storedResult = useMemo(
+    () => (resultId ? getTestResultById(resultId) : null),
+    [resultId],
+  );
+  const result = storedResult ?? remoteResult;
+  const backHref = useMemo(() => {
+    if (fromAdmin || getAdminSession()) return "/admin";
+    return "/";
+  }, [fromAdmin]);
+  const isAdminView = fromAdmin || getAdminSession();
+  const backLabel = isAdminView ? "← Torna all'admin" : "← Torna alla home";
 
   useEffect(() => {
     if (!resultId) return;
-    const stored = getTestResultById(resultId);
-    if (!stored) {
+    if (storedResult) return;
+    const session = getAdminSession();
+    if (!session) {
       router.replace("/test");
       return;
     }
-    setResult(stored);
-  }, [resultId, router]);
+    const loadRemote = async () => {
+      try {
+        const { results } = await callAdminFunction<{ results: AdminTestRow[] }>(
+          "admin-list-tests",
+          { id: resultId, limit: 1 },
+        );
+        const row = results?.[0];
+        if (!row) {
+          router.replace("/test");
+          return;
+        }
+        const answers =
+          typeof row.answers === "string" ? JSON.parse(row.answers) : row.answers;
+        const summary =
+          typeof row.summary === "string" ? JSON.parse(row.summary) : row.summary;
+        setRemoteResult({
+          id: row.id,
+          email: row.email,
+          createdAt: row.created_at,
+          startedAt: row.started_at ?? undefined,
+          durationMs: row.duration_ms ?? undefined,
+          variant: row.variant === "short" ? "short" : row.variant ? "full" : undefined,
+          cohort: row.cohort ?? undefined,
+          cohortId: row.cohort_id ?? undefined,
+          referrerId: row.referrer_id ?? undefined,
+          inviteCode: row.invite_code ?? undefined,
+          unlockAt: row.unlock_at ?? undefined,
+          unlockedAt: row.unlocked_at ?? undefined,
+          answers,
+          summary: normalizeSummary(summary),
+          questionCount: row.question_count,
+        } as TestResult);
+      } catch {
+        router.replace("/test");
+      }
+    };
+    void loadRemote();
+  }, [resultId, router, storedResult]);
 
   useEffect(() => {
     if (!result?.unlockAt) {
-      setUnlockRemainingMs(null);
-      return;
+      const timer = window.setTimeout(() => setUnlockRemainingMs(null), 0);
+      return () => window.clearTimeout(timer);
     }
     const unlockAt = Date.parse(result.unlockAt);
     if (Number.isNaN(unlockAt)) {
-      setUnlockRemainingMs(null);
-      return;
+      const timer = window.setTimeout(() => setUnlockRemainingMs(null), 0);
+      return () => window.clearTimeout(timer);
     }
     const update = () => {
       const diff = unlockAt - Date.now();
@@ -468,9 +537,16 @@ export default function ResultClient() {
   return (
     <div className="min-h-screen px-5 py-10">
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
-          ← Torna alla home
-        </Link>
+        <div className="flex items-center gap-3 text-sm text-slate-500">
+          <Link href={backHref} className="hover:text-slate-800">
+            {backLabel}
+          </Link>
+          {isAdminView && (
+            <Link href="/history" className="hover:text-slate-800">
+              Storico test
+            </Link>
+          )}
+        </div>
 
         <Card className="p-6">
           <div className="flex flex-col gap-2">
@@ -527,7 +603,6 @@ export default function ResultClient() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {(Object.keys(result.summary.scores) as Color[]).map((color) => {
               const meta = colorMeta[color];
-              const score = result.summary.scores[color];
               const percent = result.summary.percentages[color];
               return (
                 <div

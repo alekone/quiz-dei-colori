@@ -1,4 +1,3 @@
-/* eslint-disable no-alert */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -13,7 +12,6 @@ import {
   deleteTestResultsRemoteByEmail,
   getTestResultsByEmail,
   getTestResultsRemoteByEmail,
-  type TestResult,
 } from "@/lib/storage";
 
 const downloadJson = (filename: string, data: unknown) => {
