@@ -25,6 +25,8 @@ export default function OnboardingFlow() {
   const [detourTitle, setDetourTitle] = useState(
     "Non dovevi cliccare NO, clicca SI!",
   );
+  const [enterOffset, setEnterOffset] = useState(0);
+  const [isEntering, setIsEntering] = useState(false);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dragStartX = useRef(0);
   const dragStartY = useRef(0);
@@ -58,21 +60,40 @@ export default function OnboardingFlow() {
     setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
   }, []);
 
-  const handleSwipeConfirm = useCallback(() => {
-    if (stepIndex >= totalSteps - 1) return;
-    handleNext();
-  }, [handleNext, stepIndex]);
+  const startEnter = useCallback((direction: "left" | "right") => {
+    setIsEntering(true);
+    setEnterOffset(direction === "left" ? 60 : -60);
+    window.requestAnimationFrame(() => {
+      setIsEntering(false);
+      setEnterOffset(0);
+    });
+  }, []);
 
-  const enterDetour = useCallback(() => {
+  const handleSwipeConfirm = useCallback(
+    (direction: "left" | "right") => {
+      if (stepIndex >= totalSteps - 1) return;
+      startEnter(direction);
+      handleNext();
+    },
+    [handleNext, startEnter, stepIndex],
+  );
+
+  const enterDetour = useCallback((direction: "left" | "right") => {
     setDetourStep(stepIndex);
+    setDragX(0);
+    setSwipeDir("none");
+    startEnter(direction);
     const nextTitle =
       detourTitles[Math.floor(Math.random() * detourTitles.length)];
     setDetourTitle(nextTitle);
-  }, [detourTitles, stepIndex]);
+  }, [detourTitles, startEnter, stepIndex]);
 
-  const exitDetour = useCallback(() => {
+  const exitDetour = useCallback((direction: "left" | "right") => {
     setDetourStep(null);
-  }, []);
+    setDragX(0);
+    setSwipeDir("none");
+    startEnter(direction);
+  }, [startEnter]);
 
   const updateSwipeDir = useCallback((deltaX: number) => {
     if (deltaX > 12) {
@@ -89,10 +110,11 @@ export default function OnboardingFlow() {
     const target = event.target as HTMLElement | null;
     if (target?.closest("button")) return;
     setIsDragging(true);
+    setDragX(0);
+    setSwipeDir("none");
     dragStartX.current = event.clientX;
     dragStartY.current = event.clientY;
     dragStartTime.current = performance.now();
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   };
 
   const updateDrag = useCallback((clientX: number, clientY: number) => {
@@ -127,7 +149,7 @@ export default function OnboardingFlow() {
         setSwipeDir("none");
         setFlashDir(null);
         if (dir === "right") {
-          exitDetour();
+          exitDetour("right");
         } else {
           const nextTitle =
             detourTitles[Math.floor(Math.random() * detourTitles.length)];
@@ -138,7 +160,18 @@ export default function OnboardingFlow() {
     }
     if (stepIndex >= totalSteps - 1) return;
     if (dir === "left" && stepIndex > 0) {
-      enterDetour();
+      const width = cardRef.current?.offsetWidth ?? 320;
+      setSwipeDir(dir);
+      setFlashDir(dir);
+      setIsSwipingOut(true);
+      setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
+      window.setTimeout(() => {
+        setIsSwipingOut(false);
+        setDragX(0);
+        setSwipeDir("none");
+        setFlashDir(null);
+        enterDetour("left");
+      }, 450);
       return;
     }
     const width = cardRef.current?.offsetWidth ?? 320;
@@ -151,7 +184,7 @@ export default function OnboardingFlow() {
       setDragX(0);
       setSwipeDir("none");
       setFlashDir(null);
-      handleSwipeConfirm();
+      handleSwipeConfirm(dir);
     }, 450);
   }, [
     detourStep,
@@ -177,55 +210,34 @@ export default function OnboardingFlow() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [stepIndex, triggerSwipe]);
 
-  const finishDrag = useCallback((clientX: number, clientY: number) => {
+  const handlePointerUp = () => {
     if (!isDragging) return;
     setIsDragging(false);
-    const deltaX = clientX - dragStartX.current;
-    const deltaY = clientY - dragStartY.current;
-    const isMostlyHorizontal = Math.abs(deltaX) > Math.abs(deltaY) * 0.8;
-    if (!isMostlyHorizontal) {
-      setDragX(0);
-      setSwipeDir("none");
-      return;
-    }
+    const width = cardRef.current?.offsetWidth ?? 320;
+    const threshold = Math.min(120, width * 0.25);
+    const deltaX = dragX;
     const elapsed = Math.max(1, performance.now() - dragStartTime.current);
     const velocityX = deltaX / elapsed;
-    const shouldCommit = Math.abs(deltaX) > 90 || Math.abs(velocityX) > 0.6;
+    const shouldCommit =
+      Math.abs(deltaX) > threshold || Math.abs(velocityX) > 0.65;
     if (shouldCommit) {
-      triggerSwipe(deltaX >= 0 ? "right" : "left");
+      const dir = deltaX >= 0 ? "right" : "left";
+      triggerSwipe(dir);
     } else {
       setDragX(0);
       setSwipeDir("none");
     }
-  }, [isDragging, triggerSwipe]);
-
-  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    finishDrag(event.clientX, event.clientY);
   };
-
-  useEffect(() => {
-    if (!isDragging) return;
-    const handleMove = (event: PointerEvent) => updateDrag(event.clientX, event.clientY);
-    const handleUp = (event: PointerEvent) => finishDrag(event.clientX, event.clientY);
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    window.addEventListener("pointercancel", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-      window.removeEventListener("pointercancel", handleUp);
-    };
-  }, [isDragging, updateDrag, finishDrag]);
 
   const startTest = () => {
     router.push(`/test?variant=${variant}`);
   };
 
-  const cardTransform = `translateX(${dragX}px) rotate(${Math.max(
+  const cardTransform = `translateX(${dragX + enterOffset}px) rotate(${Math.max(
     -6,
     Math.min(6, dragX / 20),
   )}deg)`;
-  const cardTransition = isDragging || isSwipingOut ? "none" : "transform 180ms ease";
+  const cardTransition = isDragging || isEntering ? "none" : "transform 180ms ease";
 
   useEffect(() => {
     if (typeof document === "undefined") return;
