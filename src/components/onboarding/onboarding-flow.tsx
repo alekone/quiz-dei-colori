@@ -164,7 +164,7 @@ export default function OnboardingFlow() {
       setSwipeDir(dir);
       setFlashDir(dir);
       setIsSwipingOut(true);
-      setDragX((dir === "right" ? 1 : -1) * (width * 1.1));
+      setDragX(-1 * (width * 1.1));
       window.setTimeout(() => {
         setIsSwipingOut(false);
         setDragX(0);
