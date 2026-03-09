@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { callAdminFunction } from "@/lib/adminApi";
@@ -30,6 +29,11 @@ export default function QuestionsClient() {
   const [editShort, setEditShort] = useState<Record<string, boolean>>({});
   const [saveStatus, setSaveStatus] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkColor, setBulkColor] = useState<QuestionRow["color"] | "">("");
+  const [newText, setNewText] = useState("");
+  const [newColor, setNewColor] = useState<QuestionRow["color"]>("blu");
+  const [newShort, setNewShort] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -93,6 +97,49 @@ export default function QuestionsClient() {
     } catch (err) {
       setSaveStatus((prev) => ({ ...prev, [question.id]: "error" }));
       setError(err instanceof Error ? err.message : "Errore salvataggio");
+    }
+  };
+
+  const handleCreateQuestion = async () => {
+    const text = newText.trim();
+    if (!text) return;
+    setError(null);
+    try {
+      const { question } = await callAdminFunction<{
+        question: QuestionRow;
+      }>("admin-create-question", {
+        text,
+        color: newColor,
+        is_short: newShort,
+      });
+      setQuestions((prev) =>
+        [...prev, question].sort((a, b) => a.position - b.position),
+      );
+      setNewText("");
+      setNewColor("blu");
+      setNewShort(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore creazione");
+    }
+  };
+
+  const handleDeleteQuestion = async (question: QuestionRow) => {
+    const confirmDelete =
+      typeof window === "undefined"
+        ? true
+        : window.confirm("Vuoi eliminare questa domanda?");
+    if (!confirmDelete) return;
+    setError(null);
+    try {
+      await callAdminFunction("admin-delete-question", { id: question.id });
+      setQuestions((prev) => prev.filter((item) => item.id !== question.id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(question.id);
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore eliminazione");
     }
   };
 
@@ -170,11 +217,89 @@ export default function QuestionsClient() {
       blu: { ...base.blu },
     };
     filteredQuestions.forEach((question) => {
-      summary[question.color].full += 1;
-      if (question.is_short) summary[question.color].short += 1;
+      const color = (editColors[question.id] ?? question.color) as ColorKey;
+      const isShort = editShort[question.id] ?? question.is_short;
+      summary[color].full += 1;
+      if (isShort) summary[color].short += 1;
     });
     return summary;
-  }, [filteredQuestions]);
+  }, [editColors, editShort, filteredQuestions]);
+
+  type ColorKey = QuestionRow["color"];
+
+  const allSelected =
+    filteredQuestions.length > 0 &&
+    filteredQuestions.every((question) => selectedIds.has(question.id));
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(filteredQuestions.map((question) => question.id)));
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const applyBulkColor = () => {
+    if (!bulkColor || selectedIds.size === 0) return;
+    setEditColors((prev) => {
+      const next = { ...prev };
+      selectedIds.forEach((id) => {
+        next[id] = bulkColor;
+      });
+      return next;
+    });
+  };
+
+  const applyBulkShort = (value: boolean) => {
+    if (selectedIds.size === 0) return;
+    setEditShort((prev) => {
+      const next = { ...prev };
+      selectedIds.forEach((id) => {
+        next[id] = value;
+      });
+      return next;
+    });
+  };
+
+  const handleBulkSave = async () => {
+    if (selectedIds.size === 0) return;
+    setError(null);
+    try {
+      const updates = Array.from(selectedIds)
+        .map((id) => {
+          const question = questions.find((item) => item.id === id);
+          if (!question) return null;
+          return {
+            id,
+            text: editTexts[id] ?? question.text,
+            color: editColors[id] ?? question.color,
+            is_short: editShort[id] ?? question.is_short,
+          };
+        })
+        .filter(Boolean);
+      const { questions: updated } = await callAdminFunction<{
+        questions: QuestionRow[];
+      }>("admin-bulk-update-questions", { updates });
+      setQuestions((prev) =>
+        prev.map((item) => updated.find((u) => u.id === item.id) ?? item),
+      );
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore salvataggio bulk");
+    }
+  };
 
   if (!isMounted || !session) {
     return null;
@@ -276,14 +401,114 @@ export default function QuestionsClient() {
               {filteredQuestions.length} righe
             </div>
           </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+            <span className="font-semibold text-slate-700">Nuova domanda</span>
+            <input
+              className="h-9 min-w-[240px] flex-1 rounded-md border border-slate-200 px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              placeholder="Testo domanda"
+              value={newText}
+              onChange={(event) => setNewText(event.target.value)}
+            />
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${colorDotClass(newColor)}`} />
+              <select
+                className="h-9 rounded-md border border-slate-200 px-3 text-sm"
+                value={newColor}
+                onChange={(event) =>
+                  setNewColor(event.target.value as QuestionRow["color"])
+                }
+              >
+                {colorOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={newShort}
+                onChange={(event) => setNewShort(event.target.checked)}
+              />
+              Short
+            </label>
+            <Button size="sm" variant="outline" onClick={handleCreateQuestion}>
+              Aggiungi
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+            <span className="font-semibold text-slate-700">
+              Bulk ({selectedIds.size})
+            </span>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+              />
+              Seleziona tutto
+            </label>
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 rounded-md border border-slate-200 px-3 text-sm"
+                value={bulkColor}
+                onChange={(event) =>
+                  setBulkColor(event.target.value as QuestionRow["color"] | "")
+                }
+              >
+                <option value="">Colore...</option>
+                {colorOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={applyBulkColor}
+                disabled={!bulkColor || selectedIds.size === 0}
+              >
+                Applica colore
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => applyBulkShort(true)}
+                disabled={selectedIds.size === 0}
+              >
+                Short ON
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => applyBulkShort(false)}
+                disabled={selectedIds.size === 0}
+              >
+                Short OFF
+              </Button>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleBulkSave}
+              disabled={selectedIds.size === 0}
+            >
+              Salva selezionate
+            </Button>
+          </div>
           <div className="mt-4 overflow-x-auto">
-            <div className="min-w-[860px] rounded-lg border border-slate-200">
-              <div className="grid grid-cols-[64px_70px_minmax(280px,1fr)_220px_120px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="min-w-[940px] rounded-lg border border-slate-200">
+              <div className="grid grid-cols-[50px_64px_70px_minmax(280px,1fr)_220px_120px_90px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span></span>
                 <span>#</span>
                 <span>Short</span>
                 <span>Testo</span>
                 <span>Colore</span>
                 <span>Salva</span>
+                <span>Elimina</span>
               </div>
               {filteredQuestions.map((question) => {
                 const status = saveStatus[question.id];
@@ -293,8 +518,15 @@ export default function QuestionsClient() {
                 return (
                   <div
                     key={question.id}
-                    className="grid grid-cols-[64px_70px_minmax(280px,1fr)_220px_120px] items-center gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0"
+                    className="grid grid-cols-[50px_64px_70px_minmax(280px,1fr)_220px_120px_90px] items-center gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0"
                   >
+                    <label className="flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(question.id)}
+                        onChange={() => toggleSelectOne(question.id)}
+                      />
+                    </label>
                     <div className="text-xs text-slate-500">
                       #{question.position}
                     </div>
@@ -354,6 +586,15 @@ export default function QuestionsClient() {
                       {status === "saving" && <span>Salvataggio...</span>}
                       {status === "saved" && <span>Salvato</span>}
                       {status === "error" && <span>Errore</span>}
+                    </div>
+                    <div className="flex items-center justify-start">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDeleteQuestion(question)}
+                      >
+                        Elimina
+                      </Button>
                     </div>
                   </div>
                 );
