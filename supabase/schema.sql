@@ -119,7 +119,7 @@ returns table (
   id text,
   text text,
   color text,
-  position integer,
+  "position" integer,
   is_short boolean,
   created_at timestamptz,
   updated_at timestamptz
@@ -140,15 +140,15 @@ begin
   end if;
 
   if p_position is null then
-    select coalesce(max(position), 0) + 1
+    select coalesce(max(qq.position), 0) + 1
       into v_position
-    from public.quiz_questions;
+    from public.quiz_questions qq;
   else
     v_position := greatest(1, p_position);
-    update public.quiz_questions
-      set position = position + 1,
+    update public.quiz_questions qq
+      set position = qq.position + 1,
           updated_at = now()
-    where position >= v_position;
+    where qq.position >= v_position;
   end if;
 
   v_id := 'q_' || replace(gen_random_uuid()::text, '-', '');
@@ -157,9 +157,9 @@ begin
   values (v_id, p_text, p_color, v_position, coalesce(p_is_short, false));
 
   return query
-    select id, text, color, position, is_short, created_at, updated_at
-    from public.quiz_questions
-    where id = v_id;
+    select qq.id, qq.text, qq.color, qq.position as "position", qq.is_short, qq.created_at, qq.updated_at
+    from public.quiz_questions qq
+    where qq.id = v_id;
 end;
 $$;
 
@@ -174,9 +174,9 @@ as $$
 declare
   v_position integer;
 begin
-  select position into v_position
-  from public.quiz_questions
-  where id = p_id;
+  select qq.position into v_position
+  from public.quiz_questions qq
+  where qq.id = p_id;
 
   if v_position is null then
     return;
@@ -185,10 +185,10 @@ begin
   delete from public.quiz_questions
   where id = p_id;
 
-  update public.quiz_questions
-    set position = position - 1,
+  update public.quiz_questions qq
+    set position = qq.position - 1,
         updated_at = now()
-  where position > v_position;
+  where qq.position > v_position;
 
   return query select p_id;
 end;
