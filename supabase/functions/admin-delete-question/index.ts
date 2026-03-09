@@ -19,11 +19,42 @@ Deno.serve(async (req) => {
   const { id } = await getBody<Payload>(req);
   if (!id) return json({ error: "ID mancante" }, 400);
 
-  const { data, error } = await supabase.rpc("admin_delete_question", {
-    p_id: id,
-  });
+  const { data: row, error: fetchError } = await supabase
+    .from("quiz_questions")
+    .select("position")
+    .eq("id", id)
+    .maybeSingle();
 
-  if (error) return json({ error: error.message }, 500);
-  const deleted = Array.isArray(data) ? data[0] : data;
-  return json({ deleted: deleted?.id ?? id });
+  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (!row?.position) {
+    return json({ deleted: id });
+  }
+
+  const { error: deleteError } = await supabase
+    .from("quiz_questions")
+    .delete()
+    .eq("id", id);
+
+  if (deleteError) return json({ error: deleteError.message }, 500);
+
+  const { data: rowsToShift, error: shiftFetchError } = await supabase
+    .from("quiz_questions")
+    .select("id, position")
+    .gt("position", row.position)
+    .order("position", { ascending: true });
+
+  if (shiftFetchError) return json({ error: shiftFetchError.message }, 500);
+
+  for (const item of rowsToShift ?? []) {
+    const { error: shiftError } = await supabase
+      .from("quiz_questions")
+      .update({
+        position: Math.max(1, item.position - 1),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+    if (shiftError) return json({ error: shiftError.message }, 500);
+  }
+
+  return json({ deleted: id });
 });
