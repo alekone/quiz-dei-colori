@@ -36,6 +36,8 @@ export default function QuestionsClient() {
   const [newShort, setNewShort] = useState(false);
   const [createStatus, setCreateStatus] = useState<string | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<string | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [reorderStatus, setReorderStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -309,6 +311,21 @@ export default function QuestionsClient() {
     }
   };
 
+  const handleReorderSave = async (nextQuestions: QuestionRow[]) => {
+    setReorderStatus(null);
+    try {
+      const updates = nextQuestions.map((item, index) => ({
+        id: item.id,
+        position: index + 1,
+      }));
+      await callAdminFunction("admin-bulk-update-questions", { updates });
+      setReorderStatus("Ordine aggiornato.");
+      window.setTimeout(() => setReorderStatus(null), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Errore riordino");
+    }
+  };
+
   if (!isMounted || !session) {
     return null;
   }
@@ -512,10 +529,14 @@ export default function QuestionsClient() {
             {deleteStatus && (
               <span className="text-xs text-emerald-600">{deleteStatus}</span>
             )}
+            {reorderStatus && (
+              <span className="text-xs text-emerald-600">{reorderStatus}</span>
+            )}
           </div>
           <div className="mt-4 overflow-x-auto">
-            <div className="min-w-[940px] rounded-lg border border-slate-200">
-              <div className="grid grid-cols-[50px_64px_70px_minmax(280px,1fr)_220px_120px_90px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="min-w-[980px] rounded-lg border border-slate-200">
+              <div className="grid grid-cols-[36px_50px_64px_70px_minmax(280px,1fr)_220px_120px_90px] items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span></span>
                 <span></span>
                 <span>#</span>
                 <span>Short</span>
@@ -532,8 +553,34 @@ export default function QuestionsClient() {
                 return (
                   <div
                     key={question.id}
-                    className="grid grid-cols-[50px_64px_70px_minmax(280px,1fr)_220px_120px_90px] items-center gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0"
+                    className="grid grid-cols-[36px_50px_64px_70px_minmax(280px,1fr)_220px_120px_90px] items-center gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0"
+                    draggable
+                    onDragStart={() => setDraggedId(question.id)}
+                    onDragEnd={() => setDraggedId(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={() => {
+                      if (!draggedId || draggedId === question.id) return;
+                      const currentIndex = questions.findIndex(
+                        (item) => item.id === draggedId,
+                      );
+                      const targetIndex = questions.findIndex(
+                        (item) => item.id === question.id,
+                      );
+                      if (currentIndex === -1 || targetIndex === -1) return;
+                      const next = [...questions];
+                      const [moved] = next.splice(currentIndex, 1);
+                      next.splice(targetIndex, 0, moved);
+                      const normalized = next.map((item, index) => ({
+                        ...item,
+                        position: index + 1,
+                      }));
+                      setQuestions(normalized);
+                      void handleReorderSave(normalized);
+                    }}
                   >
+                    <div className="cursor-grab text-xs text-slate-400">
+                      ≡
+                    </div>
                     <label className="flex items-center justify-center">
                       <input
                         type="checkbox"

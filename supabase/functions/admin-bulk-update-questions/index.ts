@@ -5,6 +5,7 @@ type UpdateItem = {
   text?: string;
   color?: string;
   is_short?: boolean;
+  position?: number;
 };
 
 type Payload = {
@@ -50,6 +51,9 @@ Deno.serve(async (req) => {
     }
     if (typeof item.is_short === "boolean") {
       update.is_short = item.is_short;
+    }
+    if (typeof item.position === "number") {
+      update.position = Math.max(1, Math.round(item.position));
     }
     if (Object.keys(update).length === 0) {
       continue;
