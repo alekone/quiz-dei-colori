@@ -34,6 +34,8 @@ export default function QuestionsClient() {
   const [newText, setNewText] = useState("");
   const [newColor, setNewColor] = useState<QuestionRow["color"]>("blu");
   const [newShort, setNewShort] = useState(false);
+  const [createStatus, setCreateStatus] = useState<string | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -104,6 +106,7 @@ export default function QuestionsClient() {
     const text = newText.trim();
     if (!text) return;
     setError(null);
+    setCreateStatus(null);
     try {
       const { question } = await callAdminFunction<{
         question: QuestionRow;
@@ -118,6 +121,8 @@ export default function QuestionsClient() {
       setNewText("");
       setNewColor("blu");
       setNewShort(false);
+      setCreateStatus("Domanda aggiunta.");
+      window.setTimeout(() => setCreateStatus(null), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore creazione");
     }
@@ -130,6 +135,7 @@ export default function QuestionsClient() {
         : window.confirm("Vuoi eliminare questa domanda?");
     if (!confirmDelete) return;
     setError(null);
+    setDeleteStatus(null);
     try {
       await callAdminFunction("admin-delete-question", { id: question.id });
       setQuestions((prev) => prev.filter((item) => item.id !== question.id));
@@ -138,6 +144,8 @@ export default function QuestionsClient() {
         next.delete(question.id);
         return next;
       });
+      setDeleteStatus("Domanda eliminata.");
+      window.setTimeout(() => setDeleteStatus(null), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore eliminazione");
     }
@@ -436,6 +444,9 @@ export default function QuestionsClient() {
             <Button size="sm" variant="outline" onClick={handleCreateQuestion}>
               Aggiungi
             </Button>
+            {createStatus && (
+              <span className="text-xs text-emerald-600">{createStatus}</span>
+            )}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
             <span className="font-semibold text-slate-700">
@@ -498,6 +509,9 @@ export default function QuestionsClient() {
             >
               Salva selezionate
             </Button>
+            {deleteStatus && (
+              <span className="text-xs text-emerald-600">{deleteStatus}</span>
+            )}
           </div>
           <div className="mt-4 overflow-x-auto">
             <div className="min-w-[940px] rounded-lg border border-slate-200">
